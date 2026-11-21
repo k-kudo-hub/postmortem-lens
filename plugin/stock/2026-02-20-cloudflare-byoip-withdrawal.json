@@ -1,0 +1,107 @@
+{
+	"id": "2026-02-20-cloudflare-byoip-withdrawal",
+	"title": "後片付けの自動処理が、Cloudflare の BYOIP の経路を消した障害",
+	"provider": "Cloudflare",
+	"service": "Cloudflare BYOIP（CDN・Spectrum・Magic Transit ほか）",
+	"startedAt": "2026-02-20",
+	"duration": "6時間7分（報告の値。経路の撤回は 2026-02-20 17:56 UTC に始まり、全件の復旧は 23:03 UTC）",
+	"source": {
+		"title": "Cloudflare outage on February 20, 2026",
+		"url": "https://blog.cloudflare.com/cloudflare-outage-february-20-2026/",
+		"publisher": "Cloudflare"
+	},
+	"summary": "削除待ちの BYOIP の経路を片付ける自動処理が、値のない問い合わせで全件を受け取り、全件を削除の対象として消し始めた。BYOIP の経路の25%がインターネットから見えなくなり、一部はサービスの結びつけまで消えたため、全件の復旧までに6時間7分かかった。",
+	"weaknesses": [
+		{
+			"id": "empty-filter-matches-all",
+			"viewpoint": "trigger.latent-change",
+			"title": "値のない絞り込みが、全件に当たる",
+			"whatHappened": "後片付けの処理が値のない pending_delete を付けて問い合わせ、API は空の文字列を「全件」と解釈したため、すべての BYOIP の経路が削除の対象になった。",
+			"quotes": [
+				"Because the client is passing pending_delete with no value, the result of Query().Get(“pending_delete”) here will be an empty string (“”), so the API server interprets this as a request for all BYOIP prefixes instead of just those prefixes that were supposed to be removed.",
+				"The new sub-task then began systematically deleting all BYOIP prefixes and all of their related dependent objects including service bindings, until the impact was noticed, and an engineer identified the sub-task and shut it down."
+			],
+			"reportedFixes": [
+				"We will improve the API schema to ensure better standardization, which will make it much easier for testing and systems to validate whether an API call is properly formed or not."
+			],
+			"lookFor": [
+				"削除・更新の対象を、クエリのパラメータやフィルタで選ぶ処理で、値が空のときに全件を返すコード（空文字列を「指定なし」として扱う分岐）",
+				"一括削除・一括更新のジョブで、対象の件数を確かめずに実行するコード",
+				"定期実行の後片付けのジョブ（cron・スケジュールされたタスク）が、本番のデータを消す権限を持っていること"
+			],
+			"countermeasures": [
+				{
+					"action": "削除の対象を選ぶ条件が空のときは、全件ではなくエラーを返すようにし、一括削除の前に件数の上限を確かめる",
+					"firstStep": "一括削除・一括更新をしているジョブを一覧にし、対象を選ぶ条件が空のときの挙動をコードで確かめる"
+				}
+			]
+		},
+		{
+			"id": "no-circuit-breaker-for-mass-change",
+			"viewpoint": "containment.automation",
+			"title": "速すぎる・広すぎる変更を止める仕組みがない",
+			"whatHappened": "自動処理が経路を次々に消していくのを止める仕組みがなく、影響に気づいた人が処理を止めるまで削除が続いた。世界全体の障害ではなかったが、影響の範囲は大きすぎたと報告は書いている。",
+			"quotes": [
+				"The new sub-task then began systematically deleting all BYOIP prefixes and all of their related dependent objects including service bindings, until the impact was noticed, and an engineer identified the sub-task and shut it down.",
+				"While this outage wasn't itself global, the blast radius and impact were unacceptably large, further reinforcing Code Orange: Fail Small as a priority until we have re-established confidence in all changes to our network being as gradual as possible."
+			],
+			"reportedFixes": [
+				"We will improve our monitoring to detect when changes are happening too fast or too broadly, such as withdrawing or deleting BGP prefixes quickly, and disable the deployment of snapshots when this happens.",
+				"This will form a type of circuit breaker to stop any out-of-control process that is manipulating the database from having a large blast radius, like we saw in this incident."
+			],
+			"lookFor": [
+				"自動処理が一度に変更・削除できる件数や割合に上限がないコード",
+				"本番のデータを変える自動処理に、止めるスイッチ（機能フラグ・停止の設定）がないこと"
+			],
+			"countermeasures": [
+				{
+					"action": "本番のデータを変える自動処理に、一度に変えられる件数の上限と、すぐ止められるスイッチを付ける",
+					"firstStep": "本番のデータを変える自動処理を一覧にし、それぞれを止める方法があるかを確かめる"
+				}
+			]
+		},
+		{
+			"id": "test-missed-autonomous-task",
+			"viewpoint": "trigger.test-gap",
+			"title": "人の操作を通さずに動く処理を、テストしていない",
+			"whatHappened": "テストは顧客が API を操作する流れを確かめていたが、裏で動く処理が人の入力なしに利用者のデータを変える場合を確かめていなかった。",
+			"quotes": [
+				"While our engineers successfully tested the exact process a customer would have followed, testing did not cover a scenario where the task-runner service would independently execute changes to user data without explicit input."
+			],
+			"reportedFixes": [],
+			"lookFor": [
+				"定期実行のジョブ・ワーカー・バッチのうち、テストがないもの",
+				"テストのデータ（モック・フィクスチャ）が少なく、本番のデータの件数や状態の幅を表していないこと"
+			],
+			"countermeasures": [
+				{
+					"action": "利用者のデータを変える定期実行のジョブにテストを書き、条件が空・全件に当たる場合を確かめる",
+					"firstStep": "利用者のデータを変えるジョブを一覧にし、それぞれにテストがあるかを確かめる"
+				}
+			]
+		},
+		{
+			"id": "no-fast-rollback-of-data",
+			"viewpoint": "recovery.rollback",
+			"title": "壊れたデータを、すぐに前の状態へ戻せない",
+			"whatHappened": "利用者の設定と運用の状態が同じデータベースにあり、戻すにはデータベースのスナップショットを使う必要があった。状態の壊れ方が利用者ごとに違い、一部は手作業で戻した。",
+			"quotes": [
+				"This makes manual rollback processes more challenging because engineers need to utilize database snapshots instead of rationalizing between desired and actual states.",
+				"BYOIP prefixes were in different states of impact during this incident, and each of these different states required different actions:"
+			],
+			"reportedFixes": [
+				"We will snap shot the data that we read from the database and are applying to Production, and apply those snapshots in the same way that we deploy all our other Production changes, mediated by health metrics that can automatically stop the deployment if things are going wrong."
+			],
+			"lookFor": [
+				"利用者が書いた設定と、システムが動かすための状態を、同じテーブル・同じデータベースに持っている設計",
+				"削除を物理削除で行い、消したデータを戻す手段（論理削除・履歴テーブル・スナップショット）がないコード"
+			],
+			"countermeasures": [
+				{
+					"action": "削除は論理削除か履歴を残す形にし、利用者ごとに前の状態へ戻せるようにする",
+					"firstStep": "本番で物理削除をしている処理を一覧にし、消したデータを戻す手段があるかを確かめる"
+				}
+			]
+		}
+	]
+}

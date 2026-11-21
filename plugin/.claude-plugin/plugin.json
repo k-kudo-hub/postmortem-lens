@@ -1,0 +1,8 @@
+{
+	"name": "postmortem-lens",
+	"description": "直近の大規模障害のストックと自分のリポジトリを照らし、同じ起き方で止まりうる弱い箇所を重要な順に出す",
+	"author": { "name": "k-kudo-hub" },
+	"homepage": "https://k-kudo-hub.github.io/postmortem-lens/",
+	"repository": "https://github.com/k-kudo-hub/postmortem-lens",
+	"license": "MIT"
+}

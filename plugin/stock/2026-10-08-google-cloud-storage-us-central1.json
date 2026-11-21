@@ -1,0 +1,62 @@
+{
+	"id": "2026-10-08-google-cloud-storage-us-central1",
+	"title": "振り分けの設定変更で、Google Cloud Storage の一部のノードに書き込みが集中した障害",
+	"provider": "Google",
+	"service": "Google Cloud Storage（us-central1）",
+	"startedAt": "2026-10-08",
+	"duration": "合計18時間11分（2026-10-08 に12時間30分、10-09 に再発して5時間41分）",
+	"source": {
+		"title": "Incident Report（Cloud Storage の us-central1 での書き込みの遅延とエラー）",
+		"url": "https://status.cloud.google.com/incidents/mSFVt6PiP557bjRyYsut",
+		"publisher": "Google"
+	},
+	"summary": "容量の偏りを直すための振り分けの設定変更が、容量を考えた振り分けを迂回し、空きの少ない一部のノードに書き込みが集中した。翌日には、別の機能の戻しが不完全だったために同じ偏りが再発した。",
+	"weaknesses": [
+		{
+			"id": "routing-change-bypasses-capacity",
+			"viewpoint": "trigger.rollout-scope",
+			"title": "振り分けの設定変更が、容量を考えた振り分けを迂回する",
+			"whatHappened": "ロードバランサーの振り分けの最適化の設定変更が、容量を考えた振り分けを迂回し、空きの少ない一部のノードに書き込みの大部分が集まった。",
+			"quotes": [
+				"A traffic sorting optimization configuration update to the Google Cloud Storage load balancing layer intended to address localized capacity constraints caused severe resource exhaustion on specific storage backend nodes in the affected region by inadvertently bypassing the standard capacity-aware routing logic, resulting in a severe load imbalance.",
+				"Consequently, a small fraction of storage backend nodes in the us-central1 region received an overwhelming proportion of incoming write traffic despite having low available serving capacity."
+			],
+			"reportedFixes": [
+				"We are updating our deployment protocols to ensure that load balancing logic changes are rigorously validated in alternative, smaller regions before being rolled out to larger, highly utilized regions.",
+				"We are enhancing the storage load balancing architecture to strictly enforce capacity constraints, ensuring that traffic distribution logic cannot bypass pre-spilling safeguards and route traffic to clusters lacking sufficient serving resources."
+			],
+			"lookFor": [
+				"ロードバランサーの振り分けの設定（重み・アフィニティ・コンシステントハッシュ・sticky session）を、段階的に試さずに全体へ入れる手順",
+				"振り分けの設定で、特定のノードやシャードに偏りうるもの（キーの偏り・固定の重み）",
+				"ノードごとの負荷の偏りを監視していないこと",
+				"本番が複数の環境（リージョン・クラスタ・テナント）にあるのに、デプロイが全環境へ同時に入る CI/CD の設定"
+			],
+			"countermeasures": [
+				{
+					"action": "振り分けの設定変更は、小さな範囲で試してから広げ、ノードごとの負荷の偏りを監視して止められるようにする",
+					"firstStep": "振り分けの設定がどこにあり、変更がどう展開されるかを確かめる"
+				}
+			]
+		},
+		{
+			"id": "incomplete-rollback-recurrence",
+			"viewpoint": "recovery.rollback",
+			"title": "戻しが不完全で、同じ障害が再発する",
+			"whatHappened": "翌日の再発は、別の機能（アップロードの計画）の戻しが不完全だったために振り分けが壊れ、小さなノードに負荷が集中したことで起きた。",
+			"quotes": [
+				"The recurrence of the issue on October 9 was caused by an incomplete rollback of an upload planner feature, which broke the load balancing mechanism and overloaded a few smaller storage backend nodes."
+			],
+			"reportedFixes": [],
+			"lookFor": [
+				"1つの機能が複数の設定・フラグ・マイグレーションにまたがっていて、戻すときにどれを戻すかが書かれていないこと",
+				"機能フラグの依存関係（あるフラグが別のフラグを前提にしている）が管理されていないコード"
+			],
+			"countermeasures": [
+				{
+					"action": "機能ごとに、戻すときに戻す設定・フラグ・マイグレーションの一覧を残す",
+					"firstStep": "直近に入れた機能を1つ選び、戻すのに必要な変更をすべて書き出せるか試す"
+				}
+			]
+		}
+	]
+}
