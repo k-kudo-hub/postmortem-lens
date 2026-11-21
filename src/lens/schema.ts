@@ -1,6 +1,9 @@
 import { z } from "zod/v4";
 import { VIEWPOINT_IDS } from "./viewpoints";
 
+// 本番のページの CSP は eval を許さないため、Zod が起動時に new Function を試さないようにする
+z.config({ jitless: true });
+
 /** 今とれる対策 */
 export const actionSchema = z.object({
 	action: z.string().describe("自社で今とれる対策。何をするかを一文で"),
