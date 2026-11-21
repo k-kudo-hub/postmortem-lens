@@ -1,0 +1,101 @@
+{
+	"id": "2026-09-29-azure-openai-sweden-central",
+	"title": "キャッシュの消去とヘルスチェックの作りで、Azure OpenAI Service が再起動を繰り返した障害",
+	"provider": "Microsoft",
+	"service": "Azure OpenAI Service（Sweden Central）",
+	"startedAt": "2026-09-29",
+	"duration": "約6時間（2026-09-29 10:03 UTC 〜 15:58 UTC）",
+	"source": {
+		"title": "Post Incident Review (PIR) – Azure OpenAI Service, Foundry Agent Service, Foundry Models, and Azure AI services – Intermittent request failures and latency in Sweden Central（Tracking ID: 7QL5-Z50）",
+		"url": "https://azure.status.microsoft/en-us/status/history/",
+		"publisher": "Microsoft",
+		"note": "Azure status history の Tracking ID 7QL5-Z50 の項"
+	},
+	"summary": "ピークの時間帯のデプロイで内部のキャッシュが消え、バックエンドへの要求が通常の約20倍になった。接続が使い切られると、データベースへの接続を確かめるヘルスチェックに失敗したインスタンスが次々に再起動され、残ったインスタンスに再送が集中した。原因の特定に時間がかかり、約6時間影響が続いた。",
+	"weaknesses": [
+		{
+			"id": "cache-cleared-at-peak",
+			"viewpoint": "trigger.normal-operation",
+			"title": "デプロイでキャッシュが消え、バックエンドに要求が押し寄せる",
+			"whatHappened": "ピークの時間帯に行ったデプロイでキャッシュが消え、キャッシュを読む処理の欠陥も重なって、バックエンドへの要求が通常の約20倍になった。",
+			"quotes": [
+				"As part of this deployment, the internal service's caches were cleared and - because the deployment coincided with peak traffic hours in the region - this produced a large number of cache misses, where requests were made for information no longer stored in the cache.",
+				"By approximately 10:00 UTC, traffic to the backend service had increased to approximately 20 times its normal level."
+			],
+			"lookFor": [
+				"プロセスの中に持つキャッシュ（メモリ上のキャッシュ）で、デプロイや再起動のたびに空になる作り",
+				"キャッシュが外れたときに、同じキーの要求をまとめずに全部バックエンドへ流すコード（request coalescing・singleflight がない）",
+				"デプロイの時間帯を決めていない、またはピークの時間帯にデプロイを止めていない CI の設定"
+			],
+			"countermeasures": [
+				{
+					"action": "キャッシュが外れたときの要求をまとめ（singleflight）、デプロイ後にキャッシュを温めてから流量を受ける",
+					"firstStep": "プロセス内のキャッシュを使っている箇所と、外れたときの処理をコードで確かめる"
+				}
+			]
+		},
+		{
+			"id": "health-check-depends-on-db",
+			"viewpoint": "containment.automation",
+			"title": "ヘルスチェックが依存先への接続に依存し、再起動が連鎖する",
+			"whatHappened": "各インスタンスのヘルスチェックがデータベースへの接続を確かめていたため、接続が使い切られると次々にヘルスチェックに失敗して再起動され、残ったインスタンスに再送が集中した。これが障害を長引かせた主な原因だった。",
+			"quotes": [
+				"Automated health checks for each instance depended on successfully connecting to the database layer.",
+				"As more instances entered this restart loop, fewer healthy instances remained to serve requests, and retries from dependent services further increased the load on the remaining instances.",
+				"We have reconfigured the automated health check for the backend service so that it no longer depends on connectivity to its database layer, preventing instances from being restarted unnecessarily during dependency issues. (Completed)"
+			],
+			"lookFor": [
+				"Kubernetes の livenessProbe が、データベース・キャッシュ・外部 API への接続を確かめるエンドポイント（/health・/healthz）を叩いている設定",
+				"ヘルスチェックの処理の中で、データベースへのクエリや Redis への ping を行っているコード",
+				"依存先の不調で全インスタンスが同時に再起動されうる設定（livenessProbe と readinessProbe が同じエンドポイント）"
+			],
+			"countermeasures": [
+				{
+					"action": "livenessProbe はプロセス自身が動いているかだけを確かめ、依存先への接続は readinessProbe か別の監視で見る",
+					"firstStep": "livenessProbe が叩くエンドポイントの処理を読み、依存先への接続を確かめていないかを見る"
+				}
+			]
+		},
+		{
+			"id": "retry-amplification",
+			"viewpoint": "cascade.redistribution",
+			"title": "クライアントの再送が、負荷をさらに押し上げる",
+			"whatHappened": "応答の遅れで接続が長く保たれ、クライアントの再送が要求を増やして、接続の容量を使い切った。",
+			"quotes": [
+				"This higher latency caused connections to be held open longer, while client retries added further requests.",
+				"As a result, the network connection capacity on the infrastructure node instances was exhausted, so new outbound connections to both the caching layer and the database layer could not be established."
+			],
+			"lookFor": [
+				"HTTP クライアント・SDK の再送の設定で、間隔を延ばさない（指数バックオフなし）・回数の上限が大きいもの",
+				"外への接続のタイムアウトが長い、または設定していない HTTP クライアント・データベースの接続プール",
+				"接続プールの上限と、インスタンスあたりの接続数の合計が、依存先の上限を超えうる設定"
+			],
+			"countermeasures": [
+				{
+					"action": "再送を指数バックオフとジッターにし、回数に上限を設け、外への接続には短いタイムアウトを付ける",
+					"firstStep": "HTTP クライアントと接続プールの再送・タイムアウトの設定を一覧にする"
+				}
+			]
+		},
+		{
+			"id": "connection-exhaustion-invisible",
+			"viewpoint": "recovery.diagnosis",
+			"title": "接続の枯渇が、監視の値に表れない",
+			"whatHappened": "既存のネットワークと診断の値では接続の枯渇が分からず、原因と結びつけるのに時間がかかったため、台数やリソースを増やす対処が効かないまま続いた。",
+			"quotes": [
+				"Existing network metrics and diagnostic metrics did not effectively indicate the connection exhaustion issue in this scenario.",
+				"It took an extended amount of time to correlate the failures with what was causing this specific connection exhaustion scenario."
+			],
+			"lookFor": [
+				"接続プールの使用数・待ち・枯渇を計測していないこと（メトリクスの定義・ダッシュボードの定義・アラートのルール）",
+				"外への接続の失敗（接続の確立のタイムアウト）を、ほかのエラーと区別して記録していないコード"
+			],
+			"countermeasures": [
+				{
+					"action": "接続プールの使用数と待ち、外への接続の確立の失敗を計測し、アラートの条件にする",
+					"firstStep": "いまのメトリクスとダッシュボードで、接続プールの使用数が見られるかを確かめる"
+				}
+			]
+		}
+	]
+}

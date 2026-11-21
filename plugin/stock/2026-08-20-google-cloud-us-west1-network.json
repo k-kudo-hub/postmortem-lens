@@ -1,0 +1,74 @@
+{
+	"id": "2026-08-20-google-cloud-us-west1-network",
+	"title": "光ファイバーの保守で、Google Cloud の us-west1 の多くのサービスが劣化した障害",
+	"provider": "Google",
+	"service": "Google Cloud（us-west1）",
+	"startedAt": "2026-08-20",
+	"duration": "2時間22分（2026-08-20 15:00 UTC 〜 17:22 UTC）",
+	"source": {
+		"title": "Incident Report（us-west1 の複数サービスの劣化）",
+		"url": "https://status.cloud.google.com/incidents/utF3FMFdQfwBzJcGG6vf",
+		"publisher": "Google"
+	},
+	"summary": "予定していた光ファイバーの保守で、us-west1 のデータセンター間の通信容量が減り、自動の迂回もうまく働かずに混雑した。Spanner などの基盤の遅れが下流のサービスに連鎖し、Persistent Disk・GKE・Cloud Storage など多くのサービスが劣化した。",
+	"weaknesses": [
+		{
+			"id": "maintenance-reduces-capacity",
+			"viewpoint": "trigger.reduced-capacity",
+			"title": "予定した保守が、容量を想定以上に減らす",
+			"whatHappened": "予定していた光ファイバーの保守が、データセンター間の通信容量を想定外に減らし、自動の迂回も別の容量へうまく振り分けられなかった。",
+			"quotes": [
+				"The disruption originated during scheduled fiber optic maintenance, which unexpectedly compromised network capacity between data centers within the us-west1 region.",
+				"Automated rerouting mechanisms failed to properly redistribute traffic to alternate capacity, resulting in network congestion as volumes exceeded available bandwidth in the affected area."
+			],
+			"lookFor": [
+				"保守やノードの入れ替え（ノードプールの更新・ドレイン）のときに、残りの容量で足りるかを確かめない手順や設定（PodDisruptionBudget がない・最小台数が小さい）",
+				"1つのゾーンが使えなくなったときに、残りのゾーンだけで負荷を受け止められない台数の設定（ゾーンごとの台数・オートスケールの上限）"
+			],
+			"countermeasures": [
+				{
+					"action": "保守の前に、1つのゾーンや一部の容量が欠けても負荷を受け止められるかを確かめる手順を入れる",
+					"firstStep": "PodDisruptionBudget とゾーンごとの台数の設定を確かめる"
+				}
+			]
+		},
+		{
+			"id": "dependency-latency-cascades",
+			"viewpoint": "cascade.shared-defect",
+			"title": "基盤の遅れが、下流のサービスのタイムアウトに連鎖する",
+			"whatHappened": "通信の劣化で Spanner などの基盤サービスの遅れが急増し、それに依存する Cloud Storage・IAM・Persistent Disk・GKE がタイムアウトとエラーを出した。",
+			"quotes": [
+				"Core infrastructure services, including Spanner Paxos consensus and the Unified Metadata Server (UMS), experienced significant latency spikes, which cascaded into timeouts and elevated error rates for downstream dependent products such as Cloud Storage, Cloud IAM, Persistent Disk, and Google Kubernetes Engine."
+			],
+			"lookFor": [
+				"依存先（データベース・認証・メタデータのサービス）の呼び出しに、タイムアウトやサーキットブレーカーがないコード",
+				"依存先が遅いときに、機能を落として動き続ける仕組み（キャッシュした値で返す・一部の機能を止める）がないこと"
+			],
+			"countermeasures": [
+				{
+					"action": "依存先の呼び出しにタイムアウトとサーキットブレーカーを付け、遅いときは機能を落として動き続けるようにする",
+					"firstStep": "主要な依存先の呼び出しを一覧にし、それぞれのタイムアウトの設定を確かめる"
+				}
+			]
+		},
+		{
+			"id": "backlog-after-recovery",
+			"viewpoint": "recovery.reoverload",
+			"title": "復旧のあとも、溜まった処理の消化に時間がかかる",
+			"whatHappened": "通信が戻ったあとも、イベント駆動やパイプラインのサービスでは、障害中に溜まった処理をワーカーが消化するまで遅れが続いた。",
+			"quotes": [
+				"For event-driven and pipeline services, inbound error rates dropped to 0 immediately, but some operations experienced elevated latency while workers processed through backlogs accumulated during the outage, clearing later for Cloud Pub/Sub, Cloud Build & Deploy, Cloud Dataflow, and Cloud Storage lifecycle deletions."
+			],
+			"lookFor": [
+				"キューのワーカーの並列数が固定で、溜まった処理の量に応じて増やせない設定",
+				"キューに溜まった件数・最も古いメッセージの経過時間を監視していないこと"
+			],
+			"countermeasures": [
+				{
+					"action": "キューの溜まり具合を監視し、溜まったときにワーカーを増やせるようにする",
+					"firstStep": "使っているキューと、そのワーカーの並列数の設定を一覧にする"
+				}
+			]
+		}
+	]
+}

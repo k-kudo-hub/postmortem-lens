@@ -1,0 +1,98 @@
+{
+	"id": "2026-09-30-azure-networking-gateway-control-plane",
+	"title": "止めていた更新が一斉に再開し、Azure のネットワークのコントロールプレーンがあふれた障害",
+	"provider": "Microsoft",
+	"service": "Azure（ExpressRoute Gateway・Application Gateway・Azure Firewall ほか）",
+	"startedAt": "2026-09-30",
+	"duration": "約5時間45分（2026-09-30 20:30 UTC 〜 10-01 02:15 UTC）",
+	"source": {
+		"title": "Post Incident Review (PIR) – Network Connectivity – Gateway service degradation in multiple regions（Tracking ID: 7Q30-010）",
+		"url": "https://azure.status.microsoft/en-us/status/history/",
+		"publisher": "Microsoft",
+		"note": "Azure status history の Tracking ID 7Q30-010 の項"
+	},
+	"summary": "一時的に止めていたゲートウェイの OS 更新が、期限切れで一斉に再開し、再起動と設定の取得の要求が共有のコントロールプレーンに押し寄せた。以前の変更で処理時間が延びていたことが重なってコントロールプレーンがあふれ、多くのリージョンで管理の操作が失敗した。ExpressRoute では、設定が戻る前に正常と判定されたインスタンスのせいで接続も切れた。",
+	"weaknesses": [
+		{
+			"id": "paused-updates-resume-at-once",
+			"viewpoint": "trigger.rollout-scope",
+			"title": "止めていた展開が、再開のときに一斉に流れる",
+			"whatHappened": "一時的な展開の制限が期限切れになると、止まっていた多くのゲートウェイの更新が短い時間に再開し、再起動と設定の取得の要求が急増した。",
+			"quotes": [
+				"When this restriction expired, a large number of gateway updates resumed within a short period, generating a surge in gateway restarts and configuration-retrieval requests.",
+				"We are improving how paused operating system updates resume, to ensure they follow staged rollout practices rather than resuming across large numbers of gateways at once."
+			],
+			"lookFor": [
+				"デプロイや更新を一時停止・凍結する仕組み（デプロイの凍結期間・メンテナンスウィンドウ・CI の手動承認）と、それが解けたときに溜まった変更が一度に流れる作り",
+				"Kubernetes の Deployment の maxSurge・maxUnavailable が大きい、または PodDisruptionBudget がない設定",
+				"多数の対象に同時に更新をかけるジョブ（並列数の上限がない Ansible・一括再起動のスクリプト）"
+			],
+			"countermeasures": [
+				{
+					"action": "一時停止した展開を再開するときも、通常と同じ段階的な展開（一度に更新する台数の上限）を通す",
+					"firstStep": "デプロイを止める仕組みと、再開したときの挙動を手順書やワークフローの定義で確かめる"
+				}
+			]
+		},
+		{
+			"id": "control-plane-no-load-shedding",
+			"viewpoint": "cascade.shared-entry",
+			"title": "共有のコントロールプレーンに、急増を断る仕組みがない",
+			"whatHappened": "多くのゲートウェイが共有するリージョンのコントロールプレーンに、要求の急増と処理時間の延びが重なり、既存の流量の制限では重要な処理を守れなかった。",
+			"quotes": [
+				"The combination of increased request volume and longer processing times overwhelmed the control plane, affecting its ability to process requests reliably.",
+				"Existing request-throttling and load-protection mechanisms did not sufficiently protect critical processing under these conditions."
+			],
+			"lookFor": [
+				"多くのインスタンスが起動時に同じサービス（設定サーバー・メタデータ API・認証基盤）から設定を取りに行く作り",
+				"その共有サービスに、流量の制限（rate limit）・優先度による処理の振り分け・同時実行数の上限がないこと",
+				"起動時の設定の取得が失敗したときに、間隔を空けずに再試行するコード"
+			],
+			"countermeasures": [
+				{
+					"action": "共有の設定サービスに流量の制限を入れ、起動時の設定の取得を指数バックオフとジッターで再試行させる",
+					"firstStep": "起動時に設定を取りに行く先と、その再試行の設定をコードから書き出す"
+				}
+			]
+		},
+		{
+			"id": "healthy-before-ready",
+			"viewpoint": "containment.automation",
+			"title": "準備が終わる前に「正常」と判定される",
+			"whatHappened": "再起動したゲートウェイが、設定と経路の情報を戻しきる前に正常と判定され、冗長化した相方の更新が先に進んだため、両方とも経路の設定を取れずに接続が切れた。",
+			"quotes": [
+				"Gateway instances restarting during the update process were marked healthy before their configuration and routing state had been fully restored.",
+				"This allowed updates to proceed to another redundant instance before the first instance was ready."
+			],
+			"lookFor": [
+				"readinessProbe・ヘルスチェックのエンドポイントが、プロセスが動いていることだけを返し、設定の読み込みや依存先との接続の完了を確かめていないコード",
+				"ローリング更新が、前のインスタンスの準備の完了を待たずに次へ進む設定（minReadySeconds がない・readinessProbe がない）"
+			],
+			"countermeasures": [
+				{
+					"action": "ヘルスチェックを、設定の読み込みと処理の準備が終わってから正常を返すようにし、ローリング更新はそれを待って進める",
+					"firstStep": "readinessProbe とヘルスチェックの処理が、何を確かめて正常を返しているかを読む"
+				}
+			]
+		},
+		{
+			"id": "last-known-good-config",
+			"viewpoint": "recovery.auto-recovery-scope",
+			"title": "設定を取れないときに、最後に正しかった設定で動けるか",
+			"whatHappened": "経路の設定を取れなかったゲートウェイは、約30分試したあとで、手元に保存していた最後に正しかった設定（LKG）を使って自動で接続を戻した。",
+			"quotes": [
+				"After approximately 30 minutes of unsuccessful configuration-retrieval attempts, the affected gateways automatically applied their locally stored last known good (LKG) configurations and restored connectivity."
+			],
+			"lookFor": [
+				"起動や更新のときに、外部の設定サービスから設定を取れないと起動に失敗する、または処理を止めるコード",
+				"取得した設定を手元に保存しておき、取れないときにそれを使う仕組み（キャッシュ・スナップショット）がないこと"
+			],
+			"countermeasures": [
+				{
+					"action": "外部から取る設定を手元に保存し、取れないときは最後に正しかった設定で動き続けるようにする",
+					"firstStep": "設定を外部から取っている箇所を洗い出し、取れなかったときの挙動をコードで確かめる"
+				}
+			]
+		}
+	]
+}

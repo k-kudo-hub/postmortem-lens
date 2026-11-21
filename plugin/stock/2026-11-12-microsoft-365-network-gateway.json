@@ -1,0 +1,156 @@
+{
+	"id": "2026-11-12-microsoft-365-network-gateway",
+	"title": "Microsoft 365 のネットワークゲートウェイが世界的に応答しなくなった障害",
+	"provider": "Microsoft",
+	"service": "Microsoft 365",
+	"startedAt": "2026-11-12",
+	"duration": "約24時間（2026-11-12 16:20 UTC 〜 11-13 16:10 UTC）",
+	"source": {
+		"title": "Preliminary Post Incident Report For Microsoft 365（EX1550543/MO1550821）",
+		"url": "https://www.365fanatic.com/wp-content/uploads/2026/11/postincidentreport.pdf",
+		"publisher": "Microsoft",
+		"note": "原本は Microsoft 365 管理センターにあり、管理者しか読めない。2026-11-15 付の暫定報告を 365Fanatic が転載した PDF を読んだ"
+	},
+	"summary": "Microsoft 365 の多くのサービスの前段にあるネットワークゲートウェイが応答しなくなり、Exchange Online を中心に約24時間影響が続いた。7月に展開した修正に潜んでいた欠陥に、Teams のフェイルオーバーによる負荷増と約14%の容量の欠けが重なり、正常なサーバーへの自動の振り分けが連鎖を広げた。",
+	"weaknesses": [
+		{
+			"id": "latent-defect-under-load",
+			"viewpoint": "trigger.latent-change",
+			"title": "高い負荷でだけ表に出る、数か月前の変更",
+			"whatHappened": "7月から展開した修正が、特定の負荷の条件でロック競合を起こし、サーバーの CPU とメモリを使い切らせた。3か月以上問題は出ていなかった。",
+			"quotes": [
+				"First, a latent defect caused Windows servers to become overwhelmed and unresponsive under certain load conditions.",
+				"For more than three months, the change was deployed worldwide without impact."
+			],
+			"lookFor": [
+				"入口のサーバー（API ゲートウェイ・リバースプロキシ・接続処理）で、ロック（mutex・synchronized・グローバルなロック）を取る処理",
+				"負荷試験の設定（k6・Locust・JMeter・Gatling のシナリオ）があるか、あればその流量と、本番のピークより低いか",
+				"負荷試験を CI やリリース手順で走らせていないこと"
+			],
+			"countermeasures": [
+				{
+					"action": "入口のサーバーに入れた変更を、本番のピークを上回る負荷と本番と同じ機種で試してから展開する",
+					"firstStep": "直近半年に入口のサーバーへ入れた変更を一覧にし、高い負荷で試したかを確かめる"
+				}
+			]
+		},
+		{
+			"id": "test-hardware-mismatch",
+			"viewpoint": "trigger.test-gap",
+			"title": "負荷試験の機種が本番と違う",
+			"whatHappened": "欠陥はコア数の多い新しい機種で悪化したが、負荷試験はコア数の少ない機種が中心だったため見つからなかった。",
+			"quotes": [
+				"The contention issue is worsened on machines with more cores and newer hardware; whereas our load testing tended to focus on weaker hardware with fewer cores."
+			],
+			"lookFor": [
+				"負荷試験の環境の定義（Terraform・Helm の values・docker-compose）で、インスタンスの種類・CPU 数が本番の定義と違うもの",
+				"本番とステージングで、インスタンスの種類やノードプールを別々に書いている箇所"
+			],
+			"countermeasures": [
+				{
+					"action": "負荷試験の環境のインスタンスの種類とコア数を、本番で最も台数の多いものにそろえる",
+					"firstStep": "本番とステージングのインスタンスの種類を、インフラの定義から並べて比べる"
+				}
+			]
+		},
+		{
+			"id": "failover-onto-shared-gateway",
+			"viewpoint": "trigger.normal-operation",
+			"title": "フェイルオーバーで、別のサービスと共有している入口に負荷が寄る",
+			"whatHappened": "障害の約15時間前、Teams が通常運用のフェイルオーバーで、Exchange Online と共有するゲートウェイに移り、負荷と通信の形を変えた。",
+			"quotes": [
+				"Approximately fifteen hours before the outage, Teams failed over from the alternative networking gateway to the ‘primary’ gateway that also supports Exchange Online.",
+				"This type of failover is part of normal operations and is integral to standard Microsoft resiliency efforts."
+			],
+			"lookFor": [
+				"複数のサービスが同じロードバランサー・Ingress・API ゲートウェイを共有している設定",
+				"フェイルオーバー先・待機系の容量が、移ってくる負荷を足しても足りるかを決めていない設定（オートスケールの上限・固定の台数）"
+			],
+			"countermeasures": [
+				{
+					"action": "フェイルオーバーで移ってくる負荷を足しても、移り先の容量が足りるかを見積もり、足りなければ上限を上げる",
+					"firstStep": "共有している入口の一覧と、それぞれの背後のサービスを書き出す"
+				}
+			]
+		},
+		{
+			"id": "redirect-cascade",
+			"viewpoint": "cascade.redistribution",
+			"title": "正常なサーバーへの自動の振り分けが、連鎖を広げる",
+			"whatHappened": "応答しないサーバーから正常なサーバーへ自動で振り分けた結果、同じ量の負荷が少ない台数に集まり、2時間足らずで80%超のサーバーが応答しなくなった。",
+			"quotes": [
+				"However, the redirected traffic increased the likelihood for the same problem to occur on the remaining endpoints.",
+				"At its lowest, more than 80% of servers were unresponsive."
+			],
+			"lookFor": [
+				"ロードバランサーのヘルスチェックで、失敗したサーバーを上限なく切り離せる設定（切り離せる割合の上限・panic threshold がない）",
+				"Kubernetes の readinessProbe で、全 Pod が同時に外れうる設定",
+				"負荷が上がったときに要求を断る仕組み（rate limit・load shedding・同時接続の上限）がないこと"
+			],
+			"countermeasures": [
+				{
+					"action": "一度に切り離せるサーバーの割合に上限を設け、上限を超えたら振り分けをやめて要求を断る側に切り替える",
+					"firstStep": "ロードバランサーとヘルスチェックの設定で、全台が切り離されうるかを確かめる"
+				}
+			]
+		},
+		{
+			"id": "bulkhead-failed",
+			"viewpoint": "containment.bulkhead",
+			"title": "リージョン間の隔壁が効かない",
+			"whatHappened": "容量の単位とリージョンの間の隔壁が、別の問題のため連鎖を止められず、影響が世界中に広がった。",
+			"quotes": [
+				"In this case, due to a separate issue, the normal bulkheads between these different partitions did not stop the cascading failure."
+			],
+			"lookFor": [
+				"リージョン・ゾーン・セルをまたいで、振り分けや再送が行われる設定（グローバルなロードバランサーで全リージョンに流す設定）",
+				"1つのリージョンの障害で、別のリージョンに流量を寄せる設定と、その寄せ先の容量の上限"
+			],
+			"countermeasures": [
+				{
+					"action": "リージョンやセルをまたぐ振り分けに上限を設け、1つの障害が全体に広がらないようにする",
+					"firstStep": "リージョン間で流量を寄せる設定がどこにあるかを確かめる"
+				}
+			]
+		},
+		{
+			"id": "recovery-reoverload",
+			"viewpoint": "recovery.reoverload",
+			"title": "戻したサーバーが、溜まった要求で再び倒れる",
+			"whatHappened": "復旧したサーバーが、待っていた通信にすぐ押しつぶされて再び応答しなくなり、自動の復旧もこの状態を想定していなかった。",
+			"quotes": [
+				"Recovery took longer than usual because as servers returned to service, they were immediately overwhelmed by waiting traffic and became unresponsive again.",
+				"Our normally automated recovery processes were not designed to restore service from this broad unresponsive state."
+			],
+			"lookFor": [
+				"サーバーを戻すときに、流量を段階的に増やす設定（slow start・ウォームアップ）がないこと",
+				"クライアントの再送が、間隔を延ばさず（指数バックオフなし）・揺らぎなし（ジッターなし）で繰り返される設定"
+			],
+			"countermeasures": [
+				{
+					"action": "戻したサーバーへの流量を段階的に増やす設定を入れ、クライアントの再送を指数バックオフとジッターにする",
+					"firstStep": "ロードバランサーの slow start の設定と、クライアントの再送の設定を一覧にする"
+				}
+			]
+		},
+		{
+			"id": "cannot-rollback-old-change",
+			"viewpoint": "recovery.rollback",
+			"title": "数か月前の変更を、すぐに戻せない",
+			"whatHappened": "原因が数か月前の変更だったため、通常のロールバック・段階展開・機能フラグでは戻せず、修正の版を作って入れ直した。",
+			"quotes": [
+				"Additionally, since the main code defect was a latent bug from several months previous, our normal rollback, flighting, and feature flags were unable to quickly revert the change."
+			],
+			"lookFor": [
+				"機能フラグを外して古い処理を消したコード（フラグで戻す手段が残っていない変更）",
+				"ロールバックの手順が、直前の版に戻すことしか想定していないデプロイの設定"
+			],
+			"countermeasures": [
+				{
+					"action": "入口の処理を変えるときは、古い処理に戻すフラグを一定期間残し、外す日を決めておく",
+					"firstStep": "直近に機能フラグを外した変更を1つ選び、その変更だけを戻す手順を書き出せるか試す"
+				}
+			]
+		}
+	]
+}
