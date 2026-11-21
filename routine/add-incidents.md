@@ -24,7 +24,7 @@
 | Cloudflare ブログの post-mortem | https://blog.cloudflare.com/tag/post-mortem/ |
 | GitHub availability report（毎月） | https://github.blog/tag/github-availability-report/ |
 
-加えて WebSearch で「post-incident review」「postmortem」「root cause」と直近の月を組み合わせて3回以上検索し、上の表にない事業者（SaaS・決済・通信など）の一次報告を探す。
+加えて WebSearch で「post-incident review」「postmortem」「root cause」と直近の月を組み合わせて3回以上検索し、上の表にない事業者（SaaS・決済・通信・CDN の事業者）の一次報告を探す。
 
 ### 2. 足すものを選ぶ
 
@@ -44,11 +44,24 @@
 - `viewpoint` は `src/lens/viewpoints.ts` の観点の一覧の id から選ぶ。一覧にない観点は作らない
 - `quotes` は一次報告の本文の文字列を1文字も変えずに写す（英語の報告は英語のまま）
 - `lookFor` は、利用者のリポジトリで探すものを、ファイルの種類・設定の名前・コードの形で具体的に書く（例: 「Kubernetes の livenessProbe が、データベースへの接続を確かめるエンドポイントを叩いている設定」）
-- `whatHappened` `countermeasures` は日本語で、報告に書かれていることだけをもとに書く
+- `whatHappened` は日本語で、報告に書かれていることだけをもとに書く
+- `reportedFixes` には、報告が挙げた対策を一次報告の本文の文字列のまま写す。報告に対策がなければ空の配列にする
+- `countermeasures` は、報告の対策を、利用者のリポジトリで今とれる形に一般化して日本語で書く。`whatHappened` と同じ仕組みに効く対策だけにする
+- 報告の中でうまく働いた仕組み（例: 最後に正しかった設定で自動で戻った）は、弱い箇所にしない
 
 ### 4. 確かめる
 
-一次報告の本文をテキストにして、リポジトリの外（例: `/tmp/postmortem-sources/{障害の id}.txt`）に保存してから、次を実行する。すべて成功するまで直す。
+一次報告の本文を、`scripts/fetch-source.py` でテキストにしてリポジトリの外に保存する。WebFetch の結果はモデルが処理した文で、本文が一字一句そのままにならないため、突き合わせには使わない。
+
+```bash
+python3 scripts/fetch-source.py /tmp/postmortem-sources {障害の id}={一次報告の URL}
+```
+
+- HTML はタグを除いたテキストに、PDF は `pdftotext` でテキストになる。`pdftotext` がなければ `apt-get install -y poppler-utils` で入れる
+- Google Cloud の `incidents.json` は JSON のまま保存されるので、その障害の `Incident Report` の更新の本文（`updates[].text`）を取り出して、`/tmp/postmortem-sources/{障害の id}.txt` に保存し直す
+- Azure status history のページには直近の報告がすべて並ぶので、そのまま保存してよい
+
+保存したら、次を実行する。すべて成功するまで直す。
 
 ```bash
 npm ci
@@ -59,16 +72,16 @@ npm run lint
 npm run build
 ```
 
-`verify-quotes` が失敗した引用は、本文から写し直す。写し直せないものは引用から外す。
+`verify-quotes` が失敗した引用（`quotes` と `reportedFixes`）は、本文から写し直す。写し直せないものは外す。
 
 ### 5. PR を作る
 
 ```bash
-git switch -c stock/$(date +%Y-%m-%d)
+git switch -c claude/stock-$(date +%Y-%m-%d)
 git add plugin/stock
 git commit -m "✨ 障害のストックに {件数}件を足す"
 git push -u origin HEAD
-gh api repos/k-kudo-hub/postmortem-lens/pulls -f title="✨ 障害のストックに {件数}件を足す（$(date +%Y-%m-%d)）" -f head="stock/$(date +%Y-%m-%d)" -f base=main -f body="{本文}"
+gh api repos/k-kudo-hub/postmortem-lens/pulls -f title="✨ 障害のストックに {件数}件を足す（$(date +%Y-%m-%d)）" -f head="claude/stock-$(date +%Y-%m-%d)" -f base=main -f body="{本文}"
 ```
 
 PR の本文には、足した障害ごとに、名前・出典の URL・弱い箇所の数を書く。調べた出どころと、足さなかった候補とその理由も書く。

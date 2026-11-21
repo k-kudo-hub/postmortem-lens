@@ -50,7 +50,7 @@ export const incidentSchema = z.object({
 		title: z.string().min(1),
 		url: z.url({ protocol: /^https$/ }),
 		publisher: z.string().min(1),
-		/** 一次情報の出どころの補足（転載を読んだ場合など） */
+		/** 一次情報の出どころの補足（転載を読んだ場合の、原本の置き場所） */
 		note: z.string().optional(),
 	}),
 	/** 障害の要約（3文以内） */

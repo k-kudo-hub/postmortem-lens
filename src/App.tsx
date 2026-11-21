@@ -4,6 +4,8 @@ import { STOCK } from "./stock/stock";
 const INSTALL =
 	"/plugin install postmortem-lens --marketplace k-kudo-hub/postmortem-lens";
 const RUN = "/postmortem-lens:check";
+const MARKETPLACE_ADD = "/plugin marketplace add k-kudo-hub/postmortem-lens";
+const INSTALL_OLD = "/plugin install postmortem-lens@postmortem-lens";
 
 export default function App() {
 	const weaknessCount = STOCK.reduce((n, i) => n + i.weaknesses.length, 0);
@@ -56,10 +58,15 @@ export default function App() {
 						</li>
 					</ol>
 					<p className="hint">
+						Claude Code v2.1.275 より前の版では、2つに分けて入れます:{" "}
+						<code>{MARKETPLACE_ADD}</code> のあとに <code>{INSTALL_OLD}</code>
+					</p>
+					<p className="hint">
 						検査は利用者の Claude Code の中で動きます。読んだファイルは、ふだん
 						Claude Code を使うときと同じく
-						Claude（Anthropic）に送られますが、それ以外のサーバーには送りません。postmortem-lens
-						にサーバーはありません。スキルは、ファイルを読むだけで書き換えをしないよう指示しています。ライブラリの既知の脆弱性（CVE）は対象外です。それは
+						Claude（Anthropic）に送られます。スキルは、それ以外の Web
+						に送らないよう、ファイルを読むだけで書き換えないよう指示しています。postmortem-lens
+						にサーバーはありません。ライブラリの既知の脆弱性（CVE）は対象外です。それは
 						Dependabot のような脆弱性スキャナーで確かめてください。
 					</p>
 				</section>
