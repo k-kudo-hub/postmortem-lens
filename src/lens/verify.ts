@@ -35,6 +35,7 @@ export type VerifiedAnalysis = Omit<Analysis, "findings"> & {
 
 /**
  * AI が返した引用のうち、本文にそのまま見つかるものだけを残す。
+ * 同じ引用・同じ対策が重なって返ったときは1つにまとめる。
  * 引用がすべて外れた観点は、根拠がないので「記述なし」として扱う。
  */
 export function verifyAnalysis(
@@ -45,15 +46,20 @@ export function verifyAnalysis(
 	return {
 		...analysis,
 		findings: analysis.findings.map((finding) => {
-			const kept = finding.quotes.filter((quote) => {
+			const unique = [...new Set(finding.quotes)];
+			const kept = unique.filter((quote) => {
 				const q = normalize(quote);
 				return q.length >= MIN_QUOTE_LENGTH && normalizedSource.includes(q);
 			});
+			const actions = finding.actions.filter(
+				(a, i, all) => all.findIndex((b) => b.action === a.action) === i,
+			);
 			return {
 				...finding,
 				quotes: kept,
+				actions,
 				mentioned: finding.mentioned && kept.length > 0,
-				droppedQuotes: finding.quotes.length - kept.length,
+				droppedQuotes: unique.length - kept.length,
 			};
 		}),
 	};

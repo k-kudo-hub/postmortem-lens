@@ -16,6 +16,7 @@ type Props = {
 	onMark: (mark: Mark) => void;
 };
 
+/** 引用と対策は verifyAnalysis で重なりを除いてあるため、文字列をそのまま key にできる */
 export function FindingCard({ viewpoint, finding, mark, onMark }: Props) {
 	const titleId = useId();
 	const name = useId();
@@ -29,8 +30,8 @@ export function FindingCard({ viewpoint, finding, mark, onMark }: Props) {
 			<p className="why">{viewpoint.why}</p>
 
 			<div className="quotes">
-				{finding.quotes.map((quote, i) => (
-					<blockquote key={`${i}-${quote}`}>{quote}</blockquote>
+				{finding.quotes.map((quote) => (
+					<blockquote key={quote}>{quote}</blockquote>
 				))}
 			</div>
 			{finding.reading && <p className="reading">{finding.reading}</p>}
@@ -61,8 +62,8 @@ export function FindingCard({ viewpoint, finding, mark, onMark }: Props) {
 				<div className="actions-list">
 					<span className="label">今とれる対策</span>
 					<ul>
-						{finding.actions.map((a, i) => (
-							<li key={`${i}-${a.action}`}>
+						{finding.actions.map((a) => (
+							<li key={a.action}>
 								<p>{a.action}</p>
 								<p className="first-step">最初の一歩: {a.first_step}</p>
 							</li>

@@ -68,6 +68,28 @@ describe("verifyAnalysis", () => {
 		expect(finding.droppedQuotes).toBe(1);
 	});
 
+	it("同じ引用・同じ対策が重なって返ったときは、1つにまとめる", () => {
+		const quote =
+			"a latent defect caused Windows servers to become overwhelmed";
+		const action = { action: "対策", first_step: "一歩" };
+		const result = verifyAnalysis(
+			{
+				...analysis,
+				findings: [
+					{
+						...analysis.findings[0],
+						quotes: [quote, quote],
+						actions: [action, action],
+					},
+				],
+			},
+			source,
+		);
+		expect(result.findings[0].quotes).toEqual([quote]);
+		expect(result.findings[0].actions).toEqual([action]);
+		expect(result.findings[0].droppedQuotes).toBe(0);
+	});
+
 	it("引用がすべて外れた観点は、記述なしとして扱う", () => {
 		const result = verifyAnalysis(
 			{
