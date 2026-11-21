@@ -57,7 +57,7 @@
 
 ## 手元で動かす
 
-Node.js 24 で動かしています。
+Node.js 22 以上で動きます（CI と公開には Node.js 24 を使っています）。
 
 ```bash
 npm install
