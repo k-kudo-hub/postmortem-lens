@@ -1,0 +1,86 @@
+{
+	"id": "2026-10-21-github-event-streaming-overload",
+	"title": "再接続の殺到でイベントストリーミング基盤が過負荷になり、負荷の移動で広がった GitHub の障害",
+	"provider": "GitHub",
+	"service": "GitHub（イベントストリーミング基盤。PR の更新・Actions の状態・Webhook・監査ログ）",
+	"startedAt": "2026-10-21",
+	"duration": "約6時間46分（2026-10-21 14:52 UTC 〜。監査ログの遅れが最も長い）",
+	"source": {
+		"title": "GitHub availability report: October 2026（10月21日の項）",
+		"url": "https://github.blog/news-insights/company-news/github-availability-report-october-2026/",
+		"publisher": "GitHub",
+		"note": "月次の availability report の、該当する日付の項"
+	},
+	"summary": "メモリの上限に近かったサーバーで、失敗した要求のたびに即座に再接続が起き、接続とメモリが増えて過負荷になった。外したサーバーの負荷が別のサーバーに移って連鎖した。監査ログの書き込みサービスは再起動を繰り返し、遅れの解消に数時間かかった。",
+	"weaknesses": [
+		{
+			"id": "immediate-reconnect",
+			"viewpoint": "trigger.normal-operation",
+			"title": "失敗のたびに即座に再接続し、サーバーのメモリを押し上げる",
+			"whatHappened": "メモリの上限に近いサーバーで、失敗した要求のたびに新しい接続が即座に開かれ、接続数とメモリ使用が増えて、サーバーがさらに遅くなった。",
+			"quotes": [
+				"Some servers in our event streaming platform were close to their memory limits, and memory use on these servers grows with the number of client connections.",
+				"When requests to these servers failed, new connections were opened immediately, which increased the number of connections and the memory they used."
+			],
+			"reportedFixes": [
+				"We added randomized delays to reconnects after a failed request, so servers that are already slow don’t get hit with a burst of new connections.",
+				"We are alerting earlier on server memory use, so we can move traffic before a server slows down."
+			],
+			"lookFor": [
+				"Kafka・メッセージブローカー・WebSocket・gRPC のクライアントの再接続の設定で、待ち時間を置かない・ジッターがない・固定間隔のもの",
+				"ブローカーやサーバーのメモリの使用率の警告の閾値が、上限の直前にだけあるアラートのルール"
+			],
+			"countermeasures": [
+				{
+					"action": "再接続には指数バックオフとランダムな遅れ（ジッター）を付け、サーバーのメモリ使用率には上限よりかなり手前で警告を出す",
+					"firstStep": "ストリーミング・WebSocket のクライアントの再接続の設定値を一覧にする"
+				}
+			]
+		},
+		{
+			"id": "overload-moves-to-next-server",
+			"viewpoint": "cascade.redistribution",
+			"title": "過負荷のサーバーを外すと、負荷が次のサーバーに移って広がる",
+			"whatHappened": "過負荷のサーバーを外すとその負荷が別のサーバーに移り、それらも過負荷になって、約1時間かけて問題が広がった。",
+			"quotes": [
+				"We took the overloaded servers out of service, and their traffic moved to other servers. Those servers then became overloaded too, and the problem spread to more servers over the following hour."
+			],
+			"reportedFixes": [
+				"We have improved our playbooks to move hot partitions for similar situations in the future",
+				"We are adding a second destination for webhook delivery data that we can switch to, so we can keep webhook deliveries moving if our event streaming platform slows down."
+			],
+			"lookFor": [
+				"特定のパーティション・キーにトラフィックが偏り（ホットパーティション）、再配置の手順や自動化がない設定",
+				"共通のストリーミング基盤に、Webhook・監査ログなど複数の機能が同居し、切り替え先がない構成"
+			],
+			"countermeasures": [
+				{
+					"action": "偏ったパーティションを別のサーバーへ移す手順と、基盤が遅いときの別の送り先を用意し、サーバーを外す前に移し先の余力を確かめる",
+					"firstStep": "トピック・パーティションごとの負荷の偏りを見られる計測があるかを確かめる"
+				}
+			]
+		},
+		{
+			"id": "audit-log-writer-restart-loop",
+			"viewpoint": "recovery.backlog",
+			"title": "書き込みサービスが再起動を繰り返し、溜まった処理の消化に数時間かかる",
+			"whatHappened": "監査ログを書くサービスが、基盤のエラーで2時間以上再起動を繰り返して遅れが広がり、安定後も書き込める速度に上限があって、遅れの解消にさらに数時間かかった。",
+			"quotes": [
+				"The service that writes audit log events kept restarting on errors from the platform for more than two hours and fell further behind.",
+				"Once stabilized, it could only write events at a limited rate, so the backlog took several more hours to clear."
+			],
+			"reportedFixes": [],
+			"lookFor": [
+				"依存先のエラーでプロセスが終了し、再起動を繰り返すコンシューマ・ワーカー（エラー時に例外で落ちる作り）",
+				"溜まった処理を消化するときの書き込み速度の上限を、障害時に引き上げる手順がない、またはコードに固定した設定",
+				"処理の遅れ（コンシューマのラグ）を計測・警告していないこと"
+			],
+			"countermeasures": [
+				{
+					"action": "依存先のエラーでは再起動ではなく再試行と待機にし、溜まった処理を消化する速度を障害時に上げられる設定にする",
+					"firstStep": "コンシューマのラグの計測と、消化の速度の上限の設定箇所を確かめる"
+				}
+			]
+		}
+	]
+}
