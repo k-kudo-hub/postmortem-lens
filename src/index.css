@@ -62,7 +62,6 @@ h4 {
 	color: var(--muted);
 }
 
-.about,
 .howto,
 .stock {
 	margin-top: 40px;
@@ -70,14 +69,6 @@ h4 {
 
 main h2 {
 	font-size: 1.3rem;
-}
-
-.premise {
-	padding: 12px 16px;
-	font-weight: 600;
-	background: var(--surface);
-	border-left: 4px solid var(--accent);
-	border-radius: 4px;
 }
 
 .hint {

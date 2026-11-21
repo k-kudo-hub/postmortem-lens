@@ -5,18 +5,6 @@ import App from "./App";
 import { STOCK } from "./stock/stock";
 
 describe("公開ページ", () => {
-	it("著者の前提と主張を載せる", () => {
-		render(<App />);
-		expect(
-			screen.getByText(
-				/重要なのは、利用者が自身が公開しているサービスの脆弱性及びその重要性に気づけること/,
-			),
-		).toBeInTheDocument();
-		expect(
-			screen.getByText(/このサービスはその観点と、実際の対策を提供します/),
-		).toBeInTheDocument();
-	});
-
 	it("プラグインの入れ方と使い方を載せる", () => {
 		render(<App />);
 		expect(

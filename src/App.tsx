@@ -20,23 +20,6 @@ export default function App() {
 			</header>
 
 			<main>
-				<section className="about" aria-labelledby="about-heading">
-					<h2 id="about-heading">このサービスについて</h2>
-					<p>
-						重要性の高い障害が発生した際、誰もが自分のサービスは大丈夫か？と考えるものです。しかし、ここにはいくつかの問題があると思います。
-					</p>
-					<ol>
-						<li>そもそも重要性の高い障害が多く、拾いきれない</li>
-						<li>重要性の高い障害に対して、今とれる対策がわからない</li>
-					</ol>
-					<p>
-						1は仮にAIだとしても、そうした観点を持たなければ拾えません。このサービスはその観点と、実際の対策を提供します。
-					</p>
-					<p className="premise">
-						重要なのは、利用者が自身が公開しているサービスの脆弱性及びその重要性に気づけることだと思います。
-					</p>
-				</section>
-
 				<section className="howto" aria-labelledby="howto-heading">
 					<h2 id="howto-heading">使い方</h2>
 					<p>
