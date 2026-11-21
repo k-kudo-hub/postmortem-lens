@@ -1,8 +1,8 @@
 # postmortem-lens
 
-他社の障害報告（ポストモーテム）を、**自社に当てはめる観点**と**今とれる対策**に分解する Web サービスです。
+直近の大規模障害のストックで、自分のサービスや OSS の**弱い箇所**と、その**重要性**に気づくための Claude Code のプラグインです。
 
-公開 URL: https://k-kudo-hub.github.io/postmortem-lens/
+ストックの一覧: https://k-kudo-hub.github.io/postmortem-lens/
 
 ## なぜ作ったか
 
@@ -14,70 +14,97 @@
 1 は仮に AI だとしても、そうした観点を持たなければ拾えません。
 このサービスはその観点と、実際の対策を提供します。
 
+重要なのは、利用者が自身が公開しているサービスの脆弱性及びその重要性に気づけることだと思います。
+
 ## 使う人
 
-他社の障害報告を読んで、自社の運用に生かしたい SRE・運用担当・プロダクトリード。
+自分のサービスや OSS を公開していて、他社の大規模障害と同じ起き方で止まらないかを知りたい開発者・SRE・プロダクトリード。
 
 ## できること
 
-- 障害報告の本文を貼ると、5つの項目に分解します
-  - きっかけ・連鎖・封じ込めの失敗・復旧が遅れた理由・再発防止
-- 項目ごとに決まった観点（全19個）で本文を読み、観点ごとに次を出します
-  - 本文からの引用（本文と突き合わせて、そのまま見つかったものだけを表示）
-  - この報告で何が起きたか
-  - 自社への問い
+- 検査したいリポジトリで `/postmortem-lens:check` を実行すると、Claude がコードとインフラの設定（Kubernetes のマニフェスト・Terraform・CI/CD の定義など）を読み、ストックの障害と同じ起き方で止まりうる弱い箇所を出します
+- 弱い箇所は重要な順に並び、それぞれに次が付きます
+  - 重要度（高・中・低）と、その理由（起きたときの影響の広さ・条件のそろいやすさ）
+  - 根拠になるファイルと行
+  - 同じ起き方をした障害と、その報告からの引用
   - 今とれる対策と、今日から始められる最初の一歩
-- 観点ごとに「当てはまる」「まだ分からない」「当てはまらない」を選ぶと、会議に持ち込める Markdown に書き出せます
-- 報告に記述のなかった観点も、問いだけは一覧で見られます
-- 「見本を見る」で、架空の障害報告を分解した例を API キーなしで見られます
+- 対策済みだった箇所と、そのリポジトリでは判断できなかった箇所も出します
 
-観点の一覧は [`src/lens/viewpoints.ts`](src/lens/viewpoints.ts) にあります。
+### Dependabot との違い
+
+| | Dependabot | postmortem-lens |
+|---|---|---|
+| 見るもの | 依存パッケージの名前と版 | コードとインフラの設定の作り方（振り分け・再送・ヘルスチェック・隔壁・ロールバックの手段） |
+| 照らし合わせる相手 | 既知の脆弱性のデータベース | 他社で実際に起きた大規模障害の起き方 |
+| 見つけるもの | 脆弱性が報告された版のライブラリ | 他社と同じ起き方で止まりうる箇所 |
+
+ライブラリの既知の脆弱性（CVE）は対象外です。Dependabot のような脆弱性スキャナーと併せて使ってください。
 
 ## 使い方
 
-1. 公開 URL を開く
-2. 障害報告の本文を貼る（英語の報告もそのまま貼れます）
-3. Claude API キーを入れる（[Claude Console](https://platform.claude.com/settings/keys) で作れます）
-4. 「分解する」を押す。長い報告では数分かかります
-5. 観点ごとに当てはまるかを選び、会議用の Markdown をコピーするか `.md` で保存する
+Claude Code v2.1.275 以降で、次を実行してプラグインを入れます。
 
-## API キーと本文の扱い
+```text
+/plugin install postmortem-lens --marketplace k-kudo-hub/postmortem-lens
+```
 
-- このサービスにサーバーはありません。ブラウザだけで動く静的なページです
-- API キーと本文は、ブラウザから Anthropic の API（`api.anthropic.com`）にだけ送られます
-- 料金は API キーの持ち主に請求されます。モデルは Claude Opus 5.5（`claude-opus-5-5`）です
-- 「このブラウザにキーを保存する」を選んだときだけ、キーをブラウザの localStorage に保存します
-- 社外秘の障害報告を貼るときは、所属先の AI 利用の規程に従ってください
+それより前の版では、2つに分けて実行します。
+
+```text
+/plugin marketplace add k-kudo-hub/postmortem-lens
+/plugin install postmortem-lens@postmortem-lens
+```
+
+検査したいリポジトリで Claude Code を開き、実行します。
+
+```text
+/postmortem-lens:check
+```
+
+- 検査は利用者の Claude Code の中で動き、リポジトリの中身を外部に送りません。費用は利用者の Claude Code の利用枠に収まります
+- 検査はファイルを読むだけで、書き換えやコマンドの実行はしません（スキルが使うツールを Read・Grep・Glob に限っています）
+- ストックは毎週足していきます。プラグインは版を固定していないので、更新すると新しいストックで検査できます
+
+## 障害のストック
+
+`plugin/stock/` に、1件の障害を1つの JSON で置いています。障害ごとに、一次報告の出典・要約と、障害を起こした弱い箇所を持ちます。弱い箇所には、観点・何が起きたか・報告からの引用・リポジトリで探すもの・今とれる対策があります。形は [`src/stock/schema.ts`](src/stock/schema.ts)、観点の一覧は [`src/lens/viewpoints.ts`](src/lens/viewpoints.ts) にあります。
+
+- 事業者が自分で公開した一次報告だけを集めています
+- 引用は、一次報告の本文と機械的に突き合わせ、そのまま見つかったものだけを置いています。一次報告の本文は著作権があるためリポジトリに置いていません
+- 毎週、クラウドの Claude Code ルーチンが [`routine/add-incidents.md`](routine/add-incidents.md) の手順で新しい一次報告を探し、ストックに足す PR を作ります
 
 ## 分かっている制限
 
-- 読み解き・自社への問い・今とれる対策は AI が書いたものです。正しさは読み手が確かめてください
-- 引用は本文と機械的に突き合わせています。AI が本文を言い換えた引用は表示しません。そのため、本文に根拠があっても引用が外れ、観点が「記述なし」になることがあります
-- PDF は読み込めません。PDF の報告は、本文をコピーして貼ってください
+- 弱い箇所の判定と重要度は Claude が書いたものです。根拠のファイルと行を開いて、正しさを確かめてください
+- インフラの設定が別のリポジトリにある場合、その部分は「判断できない」になります
+- ストックにない起き方の弱い箇所は見つけません
 
-## 手元で動かす
+## 開発
 
 Node.js 22 以上で動きます（CI と公開には Node.js 24 を使っています）。
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173/ で開く
+npm run dev      # ストックの一覧のページを http://localhost:5173/ で開く
 ```
 
-| コマンド            | すること                       |
-| ------------------- | ------------------------------ |
-| `npm test`          | テスト（Vitest）               |
-| `npm run typecheck` | 型チェック                     |
-| `npm run lint`      | Lint と Format の確認（Biome） |
-| `npm run format`    | Format を直す                  |
-| `npm run build`     | `dist/` にビルドする           |
+| コマンド | すること |
+|----------|----------|
+| `npm test` | テスト（Vitest）。ストックがスキーマに合っているかも確かめる |
+| `SOURCES_DIR=… npm run verify-quotes` | ストックの引用を一次報告の本文と突き合わせる。本文を `{SOURCES_DIR}/{障害の id}.txt` に置いて実行する |
+| `npm run typecheck` | 型チェック |
+| `npm run lint` | Lint と Format の確認（Biome） |
+| `npm run build` | ストックの一覧のページを `dist/` にビルドする |
+| `claude plugin validate ./plugin` | プラグインの設定を検証する |
 
-## 公開のしくみ
+手元でプラグインを試すときは、検査したいリポジトリで `claude --plugin-dir {このリポジトリ}/plugin` を実行してから `/postmortem-lens:check` を実行します。
 
-`main` に push すると、GitHub Actions（`.github/workflows/deploy.yml`）が GitHub Pages に公開します。
+### 公開のしくみ
+
+`main` に push すると、GitHub Actions（`.github/workflows/deploy.yml`）がストックの一覧のページを GitHub Pages に公開します。
 GitHub Free では private のリポジトリで GitHub Pages を使えないため、リポジトリが public のときだけ動きます。
 初めて公開するときは、リポジトリの Settings → Pages で Source を「GitHub Actions」にします。
 
 ## ライセンス
 
-MIT
+MIT（引用した報告の文の著作権は各事業者にあります）
