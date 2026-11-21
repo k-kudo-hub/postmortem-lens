@@ -56,8 +56,10 @@ export default function App() {
 						</li>
 					</ol>
 					<p className="hint">
-						検査は利用者の Claude Code
-						の中で動き、リポジトリの中身を外部に送りません。ファイルの書き換えやコマンドの実行もしません。ライブラリの既知の脆弱性（CVE）は対象外です。それは
+						検査は利用者の Claude Code の中で動きます。読んだファイルは、ふだん
+						Claude Code を使うときと同じく
+						Claude（Anthropic）に送られますが、それ以外のサーバーには送りません。postmortem-lens
+						にサーバーはありません。スキルは、ファイルを読むだけで書き換えをしないよう指示しています。ライブラリの既知の脆弱性（CVE）は対象外です。それは
 						Dependabot のような脆弱性スキャナーで確かめてください。
 					</p>
 				</section>

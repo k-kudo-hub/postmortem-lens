@@ -30,6 +30,8 @@
   - 今とれる対策と、今日から始められる最初の一歩
 - 対策済みだった箇所と、そのリポジトリでは判断できなかった箇所も出します
 
+実行例: [GoogleCloudPlatform/microservices-demo を検査した結果](examples/microservices-demo.md)
+
 ### Dependabot との違い
 
 | | Dependabot | postmortem-lens |
@@ -61,8 +63,8 @@ Claude Code v2.1.275 以降で、次を実行してプラグインを入れま�
 /postmortem-lens:check
 ```
 
-- 検査は利用者の Claude Code の中で動き、リポジトリの中身を外部に送りません。費用は利用者の Claude Code の利用枠に収まります
-- 検査はファイルを読むだけで、書き換えやコマンドの実行はしません（スキルが使うツールを Read・Grep・Glob に限っています）
+- 検査は利用者の Claude Code の中で動きます。読んだファイルは、ふだん Claude Code を使うときと同じく Claude（Anthropic）に送られますが、それ以外のサーバーには送りません。postmortem-lens にサーバーはありません。費用は利用者の Claude Code の利用枠に収まります
+- スキルは、ファイルを読むだけで、書き換えや Web への送信をしないよう指示しています（ファイルの一覧を見るために `git ls-files` のような読むだけのコマンドを実行することはあります）
 - ストックは毎週足していきます。プラグインは版を固定していないので、更新すると新しいストックで検査できます
 
 ## 障害のストック
