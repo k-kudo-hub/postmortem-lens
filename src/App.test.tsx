@@ -66,6 +66,17 @@ describe("画面", () => {
 		);
 	});
 
+	it("分解しているあいだは、見本に切り替えられない", async () => {
+		analyzeReport.mockReturnValue(new Promise(() => {}));
+		const user = userEvent.setup();
+		render(<App />);
+		await user.type(screen.getByLabelText("Claude API キー"), "sk-ant-test");
+		await user.click(screen.getByLabelText("障害報告の本文"));
+		await user.paste("本文");
+		await user.click(screen.getByRole("button", { name: "分解する" }));
+		expect(screen.getByRole("button", { name: /見本を見る/ })).toBeDisabled();
+	});
+
 	it("API キーがないと分解のボタンを押せない", async () => {
 		const user = userEvent.setup();
 		render(<App />);

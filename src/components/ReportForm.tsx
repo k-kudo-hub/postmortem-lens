@@ -38,7 +38,7 @@ export function ReportForm({ running, onAnalyze, onSample }: Props) {
 
 	function handleSubmit(event: FormEvent) {
 		event.preventDefault();
-		saveKey(remember ? apiKey : null);
+		saveKey(remember ? apiKey.trim() : null);
 		onAnalyze(report, apiKey.trim());
 	}
 
@@ -96,7 +96,12 @@ export function ReportForm({ running, onAnalyze, onSample }: Props) {
 				<button type="submit" disabled={!canSubmit}>
 					分解する
 				</button>
-				<button type="button" className="secondary" onClick={onSample}>
+				<button
+					type="button"
+					className="secondary"
+					onClick={onSample}
+					disabled={running}
+				>
 					見本を見る（API キー不要）
 				</button>
 			</div>
