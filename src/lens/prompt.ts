@@ -47,5 +47,7 @@ mentioned が false の観点は、quotes・actions を空の配列、reading・
 }
 
 export function buildUserContent(report: string): string {
-	return `<report>\n${report}\n</report>`;
+	// 本文に閉じタグがあると、その後ろの文がタグの外（指示の側）に出るため、閉じタグを崩しておく
+	const escaped = report.replace(/<\/report>/gi, "<\\/report>");
+	return `<report>\n${escaped}\n</report>`;
 }
