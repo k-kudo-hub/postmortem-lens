@@ -20,12 +20,16 @@
 			"whatHappened": "7月から展開した修正が、特定の負荷の条件でロック競合を起こし、サーバーの CPU とメモリを使い切らせた。3か月以上問題は出ていなかった。",
 			"quotes": [
 				"First, a latent defect caused Windows servers to become overwhelmed and unresponsive under certain load conditions.",
-				"For more than three months, the change was deployed worldwide without impact."
+				"For more than three months, the change was deployed worldwide without impact.",
+				"Our normal load testing did not detect the latent issue because the traffic mix and SKUs used in our labs."
+			],
+			"reportedFixes": [
+				"Developed an update that returned the connection handling code path to the previously known good state"
 			],
 			"lookFor": [
 				"入口のサーバー（API ゲートウェイ・リバースプロキシ・接続処理）で、ロック（mutex・synchronized・グローバルなロック）を取る処理",
-				"負荷試験の設定（k6・Locust・JMeter・Gatling のシナリオ）があるか、あればその流量と、本番のピークより低いか",
-				"負荷試験を CI やリリース手順で走らせていないこと"
+				"負荷試験の設定（k6・Locust・JMeter・Gatling のシナリオ）があるか、あればその流量が本番のピークより低いか",
+				"負荷試験のトラフィックの構成（要求の種類の割合）が、本番の構成と違うこと"
 			],
 			"countermeasures": [
 				{
@@ -42,6 +46,7 @@
 			"quotes": [
 				"The contention issue is worsened on machines with more cores and newer hardware; whereas our load testing tended to focus on weaker hardware with fewer cores."
 			],
+			"reportedFixes": [],
 			"lookFor": [
 				"負荷試験の環境の定義（Terraform・Helm の values・docker-compose）で、インスタンスの種類・CPU 数が本番の定義と違うもの",
 				"本番とステージングで、インスタンスの種類やノードプールを別々に書いている箇所"
@@ -62,6 +67,7 @@
 				"Approximately fifteen hours before the outage, Teams failed over from the alternative networking gateway to the ‘primary’ gateway that also supports Exchange Online.",
 				"This type of failover is part of normal operations and is integral to standard Microsoft resiliency efforts."
 			],
+			"reportedFixes": [],
 			"lookFor": [
 				"複数のサービスが同じロードバランサー・Ingress・API ゲートウェイを共有している設定",
 				"フェイルオーバー先・待機系の容量が、移ってくる負荷を足しても足りるかを決めていない設定（オートスケールの上限・固定の台数）"
@@ -81,6 +87,10 @@
 			"quotes": [
 				"However, the redirected traffic increased the likelihood for the same problem to occur on the remaining endpoints.",
 				"At its lowest, more than 80% of servers were unresponsive."
+			],
+			"reportedFixes": [
+				"Implemented guardrails for traffic distribution to avoid cascading impact.",
+				"Additional monitoring for traffic-redirection patterns and connection-handling health."
 			],
 			"lookFor": [
 				"ロードバランサーのヘルスチェックで、失敗したサーバーを上限なく切り離せる設定（切り離せる割合の上限・panic threshold がない）",
@@ -102,6 +112,7 @@
 			"quotes": [
 				"In this case, due to a separate issue, the normal bulkheads between these different partitions did not stop the cascading failure."
 			],
+			"reportedFixes": [],
 			"lookFor": [
 				"リージョン・ゾーン・セルをまたいで、振り分けや再送が行われる設定（グローバルなロードバランサーで全リージョンに流す設定）",
 				"1つのリージョンの障害で、別のリージョンに流量を寄せる設定と、その寄せ先の容量の上限"
@@ -122,6 +133,9 @@
 				"Recovery took longer than usual because as servers returned to service, they were immediately overwhelmed by waiting traffic and became unresponsive again.",
 				"Our normally automated recovery processes were not designed to restore service from this broad unresponsive state."
 			],
+			"reportedFixes": [
+				"Added additional capacity as a proactive measure to help with recovery."
+			],
 			"lookFor": [
 				"サーバーを戻すときに、流量を段階的に増やす設定（slow start・ウォームアップ）がないこと",
 				"クライアントの再送が、間隔を延ばさず（指数バックオフなし）・揺らぎなし（ジッターなし）で繰り返される設定"
@@ -141,6 +155,7 @@
 			"quotes": [
 				"Additionally, since the main code defect was a latent bug from several months previous, our normal rollback, flighting, and feature flags were unable to quickly revert the change."
 			],
+			"reportedFixes": [],
 			"lookFor": [
 				"機能フラグを外して古い処理を消したコード（フラグで戻す手段が残っていない変更）",
 				"ロールバックの手順が、直前の版に戻すことしか想定していないデプロイの設定"

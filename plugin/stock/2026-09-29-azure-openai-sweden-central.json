@@ -9,7 +9,7 @@
 		"title": "Post Incident Review (PIR) – Azure OpenAI Service, Foundry Agent Service, Foundry Models, and Azure AI services – Intermittent request failures and latency in Sweden Central（Tracking ID: 7QL5-Z50）",
 		"url": "https://azure.status.microsoft/en-us/status/history/",
 		"publisher": "Microsoft",
-		"note": "Azure status history の Tracking ID 7QL5-Z50 の項"
+		"note": "Azure status history の Tracking ID 7QL5-Z50 の項。履歴ページは直近の報告だけを載せるため、古くなると読めなくなる"
 	},
 	"summary": "ピークの時間帯のデプロイで内部のキャッシュが消え、バックエンドへの要求が通常の約20倍になった。接続が使い切られると、データベースへの接続を確かめるヘルスチェックに失敗したインスタンスが次々に再起動され、残ったインスタンスに再送が集中した。原因の特定に時間がかかり、約6時間影響が続いた。",
 	"weaknesses": [
@@ -22,6 +22,10 @@
 				"As part of this deployment, the internal service's caches were cleared and - because the deployment coincided with peak traffic hours in the region - this produced a large number of cache misses, where requests were made for information no longer stored in the cache.",
 				"By approximately 10:00 UTC, traffic to the backend service had increased to approximately 20 times its normal level."
 			],
+			"reportedFixes": [
+				"We are adding additional throttling and rate limiting for the backend service, to protect it from sudden increases in traffic. (Estimated completion: October 2026)",
+				"We are increasing the resource capacity of the caching layer used by the backend service across regions. (Estimated completion: October 2026)"
+			],
 			"lookFor": [
 				"プロセスの中に持つキャッシュ（メモリ上のキャッシュ）で、デプロイや再起動のたびに空になる作り",
 				"キャッシュが外れたときに、同じキーの要求をまとめずに全部バックエンドへ流すコード（request coalescing・singleflight がない）",
@@ -29,8 +33,8 @@
 			],
 			"countermeasures": [
 				{
-					"action": "キャッシュが外れたときの要求をまとめ（singleflight）、デプロイ後にキャッシュを温めてから流量を受ける",
-					"firstStep": "プロセス内のキャッシュを使っている箇所と、外れたときの処理をコードで確かめる"
+					"action": "キャッシュが外れたときにバックエンドへ流れる要求に流量の制限を掛け、同じキーの要求はまとめて1回にする",
+					"firstStep": "プロセス内のキャッシュを使っている箇所と、外れたときにバックエンドを呼ぶ処理をコードで確かめる"
 				}
 			]
 		},
@@ -41,7 +45,9 @@
 			"whatHappened": "各インスタンスのヘルスチェックがデータベースへの接続を確かめていたため、接続が使い切られると次々にヘルスチェックに失敗して再起動され、残ったインスタンスに再送が集中した。これが障害を長引かせた主な原因だった。",
 			"quotes": [
 				"Automated health checks for each instance depended on successfully connecting to the database layer.",
-				"As more instances entered this restart loop, fewer healthy instances remained to serve requests, and retries from dependent services further increased the load on the remaining instances.",
+				"As more instances entered this restart loop, fewer healthy instances remained to serve requests, and retries from dependent services further increased the load on the remaining instances."
+			],
+			"reportedFixes": [
 				"We have reconfigured the automated health check for the backend service so that it no longer depends on connectivity to its database layer, preventing instances from being restarted unnecessarily during dependency issues. (Completed)"
 			],
 			"lookFor": [
@@ -65,6 +71,9 @@
 				"This higher latency caused connections to be held open longer, while client retries added further requests.",
 				"As a result, the network connection capacity on the infrastructure node instances was exhausted, so new outbound connections to both the caching layer and the database layer could not be established."
 			],
+			"reportedFixes": [
+				"Consider reviewing and implementing our best practices surrounding retry patterns, especially with exponential backoff, to improve workload resiliency during intermittent issues"
+			],
 			"lookFor": [
 				"HTTP クライアント・SDK の再送の設定で、間隔を延ばさない（指数バックオフなし）・回数の上限が大きいもの",
 				"外への接続のタイムアウトが長い、または設定していない HTTP クライアント・データベースの接続プール",
@@ -85,6 +94,10 @@
 			"quotes": [
 				"Existing network metrics and diagnostic metrics did not effectively indicate the connection exhaustion issue in this scenario.",
 				"It took an extended amount of time to correlate the failures with what was causing this specific connection exhaustion scenario."
+			],
+			"reportedFixes": [
+				"We have added monitoring and alerting on the load and latency of the caching layer used by the backend service. (Completed)",
+				"We are improving diagnostic metrics and automated detection, to help identify such issues more quickly. (Estimated completion: October 2026)"
 			],
 			"lookFor": [
 				"接続プールの使用数・待ち・枯渇を計測していないこと（メトリクスの定義・ダッシュボードの定義・アラートのルール）",

@@ -47,7 +47,17 @@ export function IncidentCard({ incident }: { incident: Incident }) {
 								<li key={l}>{l}</li>
 							))}
 						</ul>
-						<span className="label">今とれる対策</span>
+						{w.reportedFixes.length > 0 && (
+							<>
+								<span className="label">報告が挙げた対策</span>
+								{w.reportedFixes.map((f) => (
+									<blockquote key={f}>{f}</blockquote>
+								))}
+							</>
+						)}
+						<span className="label">
+							今とれる対策（postmortem-lens が一般化したもの）
+						</span>
 						<ul>
 							{w.countermeasures.map((c) => (
 								<li key={c.action}>

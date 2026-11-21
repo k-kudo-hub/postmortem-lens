@@ -9,7 +9,7 @@
 		"title": "Post Incident Review (PIR) – Network Connectivity – Gateway service degradation in multiple regions（Tracking ID: 7Q30-010）",
 		"url": "https://azure.status.microsoft/en-us/status/history/",
 		"publisher": "Microsoft",
-		"note": "Azure status history の Tracking ID 7Q30-010 の項"
+		"note": "Azure status history の Tracking ID 7Q30-010 の項。履歴ページは直近の報告だけを載せるため、古くなると読めなくなる"
 	},
 	"summary": "一時的に止めていたゲートウェイの OS 更新が、期限切れで一斉に再開し、再起動と設定の取得の要求が共有のコントロールプレーンに押し寄せた。以前の変更で処理時間が延びていたことが重なってコントロールプレーンがあふれ、多くのリージョンで管理の操作が失敗した。ExpressRoute では、設定が戻る前に正常と判定されたインスタンスのせいで接続も切れた。",
 	"weaknesses": [
@@ -19,7 +19,9 @@
 			"title": "止めていた展開が、再開のときに一斉に流れる",
 			"whatHappened": "一時的な展開の制限が期限切れになると、止まっていた多くのゲートウェイの更新が短い時間に再開し、再起動と設定の取得の要求が急増した。",
 			"quotes": [
-				"When this restriction expired, a large number of gateway updates resumed within a short period, generating a surge in gateway restarts and configuration-retrieval requests.",
+				"When this restriction expired, a large number of gateway updates resumed within a short period, generating a surge in gateway restarts and configuration-retrieval requests."
+			],
+			"reportedFixes": [
 				"We are improving how paused operating system updates resume, to ensure they follow staged rollout practices rather than resuming across large numbers of gateways at once."
 			],
 			"lookFor": [
@@ -35,6 +37,29 @@
 			]
 		},
 		{
+			"id": "performance-regression-in-shared-service",
+			"viewpoint": "trigger.latent-change",
+			"title": "共有サービスの処理時間を延ばす、以前の変更",
+			"whatHappened": "以前に展開した変更が、共有のコントロールプレーンの設定の処理時間を延ばしていた。要求の急増と重なって主な要因の1つになり、最後はこの変更を戻して影響が止まった。",
+			"quotes": [
+				"At the same time, a previously deployed change had increased the processing time required for configuration operations handled by a shared regional networking control plane service.",
+				"Further investigation identified the combination of elevated request volume and increased processing time per operation as the primary contributing factors."
+			],
+			"reportedFixes": [
+				"We have rolled back the change that introduced the performance regression, to de-risk this failure mode immediately. (Completed)"
+			],
+			"lookFor": [
+				"多くの呼び出し元が使う共有サービス（設定・認証・メタデータ）の処理時間を計測していない、または変更の前後で比べていないこと",
+				"共有サービスへの性能に関わる変更（クエリ・シリアライズ・ロックの変更）を、負荷を掛けて試さずに入れる手順"
+			],
+			"countermeasures": [
+				{
+					"action": "共有サービスの1件あたりの処理時間を計測し、変更の前後で延びていないかを展開の条件にする",
+					"firstStep": "共有サービスの処理時間のメトリクスがあるか、ダッシュボードで確かめる"
+				}
+			]
+		},
+		{
 			"id": "control-plane-no-load-shedding",
 			"viewpoint": "cascade.shared-entry",
 			"title": "共有のコントロールプレーンに、急増を断る仕組みがない",
@@ -43,15 +68,19 @@
 				"The combination of increased request volume and longer processing times overwhelmed the control plane, affecting its ability to process requests reliably.",
 				"Existing request-throttling and load-protection mechanisms did not sufficiently protect critical processing under these conditions."
 			],
+			"reportedFixes": [
+				"In the longer term, we are improving throttling and load-shedding mechanisms in the control plane service to help protect critical request processing during unexpected increases in demand.",
+				"We are addressing platform issues that prevented the control plane service from scaling out successfully during the incident."
+			],
 			"lookFor": [
 				"多くのインスタンスが起動時に同じサービス（設定サーバー・メタデータ API・認証基盤）から設定を取りに行く作り",
-				"その共有サービスに、流量の制限（rate limit）・優先度による処理の振り分け・同時実行数の上限がないこと",
-				"起動時の設定の取得が失敗したときに、間隔を空けずに再試行するコード"
+				"その共有サービスに、流量の制限（rate limit）・優先度による処理の振り分け・負荷が高いときに要求を断る仕組み（load shedding）がないこと",
+				"その共有サービスのオートスケールの上限が小さい、またはオートスケールがない設定"
 			],
 			"countermeasures": [
 				{
-					"action": "共有の設定サービスに流量の制限を入れ、起動時の設定の取得を指数バックオフとジッターで再試行させる",
-					"firstStep": "起動時に設定を取りに行く先と、その再試行の設定をコードから書き出す"
+					"action": "共有の設定サービスに流量の制限と、負荷が高いときに重要でない要求を断る仕組みを入れる",
+					"firstStep": "起動時に設定を取りに行く先と、そのサービスの流量の制限・オートスケールの設定を書き出す"
 				}
 			]
 		},
@@ -64,6 +93,9 @@
 				"Gateway instances restarting during the update process were marked healthy before their configuration and routing state had been fully restored.",
 				"This allowed updates to proceed to another redundant instance before the first instance was ready."
 			],
+			"reportedFixes": [
+				"We are strengthening ExpressRoute gateway health checks, to ensure that redundant instances are updated only after the initial instances have fully restored its configuration and routing state."
+			],
 			"lookFor": [
 				"readinessProbe・ヘルスチェックのエンドポイントが、プロセスが動いていることだけを返し、設定の読み込みや依存先との接続の完了を確かめていないコード",
 				"ローリング更新が、前のインスタンスの準備の完了を待たずに次へ進む設定（minReadySeconds がない・readinessProbe がない）"
@@ -72,25 +104,6 @@
 				{
 					"action": "ヘルスチェックを、設定の読み込みと処理の準備が終わってから正常を返すようにし、ローリング更新はそれを待って進める",
 					"firstStep": "readinessProbe とヘルスチェックの処理が、何を確かめて正常を返しているかを読む"
-				}
-			]
-		},
-		{
-			"id": "last-known-good-config",
-			"viewpoint": "recovery.auto-recovery-scope",
-			"title": "設定を取れないときに、最後に正しかった設定で動けるか",
-			"whatHappened": "経路の設定を取れなかったゲートウェイは、約30分試したあとで、手元に保存していた最後に正しかった設定（LKG）を使って自動で接続を戻した。",
-			"quotes": [
-				"After approximately 30 minutes of unsuccessful configuration-retrieval attempts, the affected gateways automatically applied their locally stored last known good (LKG) configurations and restored connectivity."
-			],
-			"lookFor": [
-				"起動や更新のときに、外部の設定サービスから設定を取れないと起動に失敗する、または処理を止めるコード",
-				"取得した設定を手元に保存しておき、取れないときにそれを使う仕組み（キャッシュ・スナップショット）がないこと"
-			],
-			"countermeasures": [
-				{
-					"action": "外部から取る設定を手元に保存し、取れないときは最後に正しかった設定で動き続けるようにする",
-					"firstStep": "設定を外部から取っている箇所を洗い出し、取れなかったときの挙動をコードで確かめる"
 				}
 			]
 		}

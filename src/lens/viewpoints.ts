@@ -184,6 +184,14 @@ export const VIEWPOINTS = [
 		why: "原因が分かるまでの対処は手探りになり、効かない手を重ねる。",
 	},
 	{
+		id: "recovery.backlog",
+		section: "recovery",
+		title: "溜まった処理の消化",
+		question:
+			"障害中にキューやバッチに溜まった処理を、復旧後にどれだけの時間で消化できるか。消化のあいだ、新しい処理が遅れないか。",
+		why: "入口が戻っても、溜まった処理を消化しきるまで利用者への影響は続く。",
+	},
+	{
 		id: "prevention.transferable",
 		section: "prevention",
 		title: "持ち帰れる再発防止策",

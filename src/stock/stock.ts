@@ -6,8 +6,9 @@ const files = import.meta.glob<Incident>("../../plugin/stock/*.json", {
 	import: "default",
 });
 
-function load(): Incident[] {
-	return Object.entries(files)
+/** ファイルのパスと中身から、検証して新しい順に並べたストックを作る */
+export function parseStock(entries: Record<string, unknown>): Incident[] {
+	return Object.entries(entries)
 		.map(([path, data]) => {
 			const incident = incidentSchema.parse(data);
 			const fileId = path
@@ -23,4 +24,4 @@ function load(): Incident[] {
 }
 
 /** 新しい順のストック */
-export const STOCK: Incident[] = load();
+export const STOCK: Incident[] = parseStock(files);

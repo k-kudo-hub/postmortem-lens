@@ -24,9 +24,11 @@ export const weaknessSchema = z.object({
 	whatHappened: z.string().min(1),
 	/** 根拠になる一次情報の本文の抜き出し（本文の文字列をそのまま写す） */
 	quotes: z.array(z.string().min(1)).min(1),
+	/** 報告が挙げた対策（一次情報の本文の抜き出し）。報告に対策がなければ空 */
+	reportedFixes: z.array(z.string().min(1)),
 	/** 利用者のリポジトリで、同じ弱い箇所を見つけるために探すもの */
 	lookFor: z.array(z.string().min(1)).min(1),
-	/** 今とれる対策 */
+	/** postmortem-lens が、利用者のリポジトリで今とれる形に一般化した対策 */
 	countermeasures: z.array(countermeasureSchema).min(1),
 });
 
@@ -46,14 +48,20 @@ export const incidentSchema = z.object({
 	/** 一次情報 */
 	source: z.object({
 		title: z.string().min(1),
-		url: z.url(),
+		url: z.url({ protocol: /^https$/ }),
 		publisher: z.string().min(1),
 		/** 一次情報の出どころの補足（転載を読んだ場合など） */
 		note: z.string().optional(),
 	}),
 	/** 障害の要約（3文以内） */
 	summary: z.string().min(1),
-	weaknesses: z.array(weaknessSchema).min(1),
+	weaknesses: z
+		.array(weaknessSchema)
+		.min(1)
+		.refine(
+			(ws) => new Set(ws.map((w) => w.id)).size === ws.length,
+			"弱い箇所の id が重なっています",
+		),
 });
 
 export type Countermeasure = z.infer<typeof countermeasureSchema>;

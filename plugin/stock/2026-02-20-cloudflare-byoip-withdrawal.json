@@ -4,13 +4,13 @@
 	"provider": "Cloudflare",
 	"service": "Cloudflare BYOIP（CDN・Spectrum・Magic Transit ほか）",
 	"startedAt": "2026-02-20",
-	"duration": "約6時間（2026-02-20 17:56 UTC 〜 23:03 UTC に全件を復旧）",
+	"duration": "6時間7分（報告の値。経路の撤回は 2026-02-20 17:56 UTC に始まり、全件の復旧は 23:03 UTC）",
 	"source": {
 		"title": "Cloudflare outage on February 20, 2026",
 		"url": "https://blog.cloudflare.com/cloudflare-outage-february-20-2026/",
 		"publisher": "Cloudflare"
 	},
-	"summary": "削除待ちの BYOIP の経路を片付ける自動処理が、値のない問い合わせで全件を受け取り、全件を削除の対象として消し始めた。BYOIP の経路の25%がインターネットから見えなくなり、一部はサービスの結びつけまで消えたため、全件の復旧に約6時間かかった。",
+	"summary": "削除待ちの BYOIP の経路を片付ける自動処理が、値のない問い合わせで全件を受け取り、全件を削除の対象として消し始めた。BYOIP の経路の25%がインターネットから見えなくなり、一部はサービスの結びつけまで消えたため、全件の復旧までに6時間7分かかった。",
 	"weaknesses": [
 		{
 			"id": "empty-filter-matches-all",
@@ -20,6 +20,9 @@
 			"quotes": [
 				"Because the client is passing pending_delete with no value, the result of Query().Get(“pending_delete”) here will be an empty string (“”), so the API server interprets this as a request for all BYOIP prefixes instead of just those prefixes that were supposed to be removed.",
 				"The new sub-task then began systematically deleting all BYOIP prefixes and all of their related dependent objects including service bindings, until the impact was noticed, and an engineer identified the sub-task and shut it down."
+			],
+			"reportedFixes": [
+				"We will improve the API schema to ensure better standardization, which will make it much easier for testing and systems to validate whether an API call is properly formed or not."
 			],
 			"lookFor": [
 				"削除・更新の対象を、クエリのパラメータやフィルタで選ぶ処理で、値が空のときに全件を返すコード（空文字列を「指定なし」として扱う分岐）",
@@ -37,8 +40,12 @@
 			"id": "no-circuit-breaker-for-mass-change",
 			"viewpoint": "containment.automation",
 			"title": "速すぎる・広すぎる変更を止める仕組みがない",
-			"whatHappened": "自動処理が経路を次々に消していくのを止める仕組みがなく、影響に気づいた人が処理を止めるまで削除が続いた。対策として、変更が速すぎる・広すぎるときに止めるサーキットブレーカーを挙げている。",
+			"whatHappened": "自動処理が経路を次々に消していくのを止める仕組みがなく、影響に気づいた人が処理を止めるまで削除が続いた。世界全体の障害ではなかったが、影響の範囲は大きすぎたと報告は書いている。",
 			"quotes": [
+				"The new sub-task then began systematically deleting all BYOIP prefixes and all of their related dependent objects including service bindings, until the impact was noticed, and an engineer identified the sub-task and shut it down.",
+				"While this outage wasn't itself global, the blast radius and impact were unacceptably large, further reinforcing Code Orange: Fail Small as a priority until we have re-established confidence in all changes to our network being as gradual as possible."
+			],
+			"reportedFixes": [
 				"We will improve our monitoring to detect when changes are happening too fast or too broadly, such as withdrawing or deleting BGP prefixes quickly, and disable the deployment of snapshots when this happens.",
 				"This will form a type of circuit breaker to stop any out-of-control process that is manipulating the database from having a large blast radius, like we saw in this incident."
 			],
@@ -61,6 +68,7 @@
 			"quotes": [
 				"While our engineers successfully tested the exact process a customer would have followed, testing did not cover a scenario where the task-runner service would independently execute changes to user data without explicit input."
 			],
+			"reportedFixes": [],
 			"lookFor": [
 				"定期実行のジョブ・ワーカー・バッチのうち、テストがないもの",
 				"テストのデータ（モック・フィクスチャ）が少なく、本番のデータの件数や状態の幅を表していないこと"
@@ -80,6 +88,9 @@
 			"quotes": [
 				"This makes manual rollback processes more challenging because engineers need to utilize database snapshots instead of rationalizing between desired and actual states.",
 				"BYOIP prefixes were in different states of impact during this incident, and each of these different states required different actions:"
+			],
+			"reportedFixes": [
+				"We will snap shot the data that we read from the database and are applying to Production, and apply those snapshots in the same way that we deploy all our other Production changes, mediated by health metrics that can automatically stop the deployment if things are going wrong."
 			],
 			"lookFor": [
 				"利用者が書いた設定と、システムが動かすための状態を、同じテーブル・同じデータベースに持っている設計",

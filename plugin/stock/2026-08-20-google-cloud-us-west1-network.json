@@ -21,6 +21,9 @@
 				"The disruption originated during scheduled fiber optic maintenance, which unexpectedly compromised network capacity between data centers within the us-west1 region.",
 				"Automated rerouting mechanisms failed to properly redistribute traffic to alternate capacity, resulting in network congestion as volumes exceeded available bandwidth in the affected area."
 			],
+			"reportedFixes": [
+				"Key focus areas include reforming scheduled maintenance protocols, establishing stricter safety checks and circuit redundancy requirements prior to routine maintenance, and refining automated regional traffic failover mechanisms to automatically handle sudden capacity degradation without incurring severe network congestion."
+			],
 			"lookFor": [
 				"保守やノードの入れ替え（ノードプールの更新・ドレイン）のときに、残りの容量で足りるかを確かめない手順や設定（PodDisruptionBudget がない・最小台数が小さい）",
 				"1つのゾーンが使えなくなったときに、残りのゾーンだけで負荷を受け止められない台数の設定（ゾーンごとの台数・オートスケールの上限）"
@@ -34,12 +37,13 @@
 		},
 		{
 			"id": "dependency-latency-cascades",
-			"viewpoint": "cascade.shared-defect",
-			"title": "基盤の遅れが、下流のサービスのタイムアウトに連鎖する",
+			"viewpoint": "cascade.shared-entry",
+			"title": "多くのサービスが共有する基盤の遅れが、下流のタイムアウトに連鎖する",
 			"whatHappened": "通信の劣化で Spanner などの基盤サービスの遅れが急増し、それに依存する Cloud Storage・IAM・Persistent Disk・GKE がタイムアウトとエラーを出した。",
 			"quotes": [
 				"Core infrastructure services, including Spanner Paxos consensus and the Unified Metadata Server (UMS), experienced significant latency spikes, which cascaded into timeouts and elevated error rates for downstream dependent products such as Cloud Storage, Cloud IAM, Persistent Disk, and Google Kubernetes Engine."
 			],
+			"reportedFixes": [],
 			"lookFor": [
 				"依存先（データベース・認証・メタデータのサービス）の呼び出しに、タイムアウトやサーキットブレーカーがないコード",
 				"依存先が遅いときに、機能を落として動き続ける仕組み（キャッシュした値で返す・一部の機能を止める）がないこと"
@@ -53,12 +57,13 @@
 		},
 		{
 			"id": "backlog-after-recovery",
-			"viewpoint": "recovery.reoverload",
+			"viewpoint": "recovery.backlog",
 			"title": "復旧のあとも、溜まった処理の消化に時間がかかる",
 			"whatHappened": "通信が戻ったあとも、イベント駆動やパイプラインのサービスでは、障害中に溜まった処理をワーカーが消化するまで遅れが続いた。",
 			"quotes": [
 				"For event-driven and pipeline services, inbound error rates dropped to 0 immediately, but some operations experienced elevated latency while workers processed through backlogs accumulated during the outage, clearing later for Cloud Pub/Sub, Cloud Build & Deploy, Cloud Dataflow, and Cloud Storage lifecycle deletions."
 			],
+			"reportedFixes": [],
 			"lookFor": [
 				"キューのワーカーの並列数が固定で、溜まった処理の量に応じて増やせない設定",
 				"キューに溜まった件数・最も古いメッセージの経過時間を監視していないこと"

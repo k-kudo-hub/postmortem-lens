@@ -19,7 +19,7 @@ describe.skipIf(!sourcesDir)("ストックの引用と一次情報の突き合�
 			expect(existsSync(path), `${path} がありません`).toBe(true);
 			const source = readFileSync(path, "utf8");
 			const missing = incident.weaknesses.flatMap((w) =>
-				w.quotes
+				[...w.quotes, ...w.reportedFixes]
 					.filter((q) => !isQuoteInSource(q, source))
 					.map((q) => `${w.id}: ${q}`),
 			);

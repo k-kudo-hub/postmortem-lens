@@ -78,7 +78,7 @@ export default function App() {
 
 			<footer className="site-footer">
 				<p>
-					引用の著作権は各事業者にあります。弱い箇所の読み解きと対策は
+					引用（報告の本文と、報告が挙げた対策）の著作権は各事業者にあります。弱い箇所の読み解き・リポジトリで探すもの・今とれる対策は
 					postmortem-lens が書いたもので、正しさは読み手が確かめてください。
 				</p>
 				<p>
