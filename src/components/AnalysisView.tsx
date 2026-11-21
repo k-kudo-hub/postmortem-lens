@@ -57,7 +57,7 @@ export function AnalysisView({ analysis, isSample, marks, onMark }: Props) {
 				観点ごとに「当てはまる」「まだ分からない」「当てはまらない」を選ぶと、下の会議用の
 				Markdown に反映されます。
 				{dropped > 0 &&
-					` 本文にそのまま見つからなかった引用 ${dropped} 件は表示していません。`}
+					`本文にそのまま見つからなかった引用 ${dropped} 件は表示していません。`}
 			</p>
 
 			{SECTIONS.map((section) => {
