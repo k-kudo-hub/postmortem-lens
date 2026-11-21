@@ -56,6 +56,22 @@ export const VIEWPOINTS = [
 		why: "段階的な展開で問題が出なかった変更でも、条件がそろうまで潜んでいることがある。",
 	},
 	{
+		id: "trigger.rollout-scope",
+		section: "trigger",
+		title: "一度に広げた変更",
+		question:
+			"デプロイや設定変更を、一部で様子を見ずに全体へ一度に広げていないか。広げる途中で異常に気づいて止められるか。",
+		why: "変更を一度に全体へ広げると、欠陥がそのまま全体の障害になる。",
+	},
+	{
+		id: "trigger.external-dependency",
+		section: "trigger",
+		title: "外部への依存",
+		question:
+			"他社のサービス・証明書・DNS・ライブラリなど、自社で直せないものが止まったとき、自社のサービスはどこまで動き続けられるか。",
+		why: "自社の変更がなくても、依存している外部のものが止まれば障害になる。",
+	},
+	{
 		id: "trigger.normal-operation",
 		section: "trigger",
 		title: "設計どおりの動きが負荷を変える",

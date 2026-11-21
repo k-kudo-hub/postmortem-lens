@@ -30,6 +30,22 @@ export const SAMPLE_ANALYSIS: Analysis = {
 			],
 		},
 		{
+			viewpoint: "trigger.rollout-scope",
+			mentioned: false,
+			quotes: [],
+			reading: "",
+			question: "",
+			actions: [],
+		},
+		{
+			viewpoint: "trigger.external-dependency",
+			mentioned: false,
+			quotes: [],
+			reading: "",
+			question: "",
+			actions: [],
+		},
+		{
 			viewpoint: "trigger.normal-operation",
 			mentioned: true,
 			quotes: [
