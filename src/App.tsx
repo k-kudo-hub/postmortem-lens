@@ -1,56 +1,19 @@
-import { useState } from "react";
-import { AnalysisView } from "./components/AnalysisView";
-import { ReportForm } from "./components/ReportForm";
-import { analyzeReport, createClient, toUserMessage } from "./lens/analyze";
-import type { Marks } from "./lens/markdown";
-import { type VerifiedAnalysis, verifyAnalysis } from "./lens/verify";
-import { SAMPLE_ANALYSIS } from "./sample/analysis";
-import { SAMPLE_REPORT } from "./sample/report";
+import { IncidentCard } from "./components/IncidentCard";
+import { STOCK } from "./stock/stock";
 
-type Status =
-	| { kind: "idle" }
-	| { kind: "running"; receivedChars: number }
-	| { kind: "error"; message: string };
+const INSTALL =
+	"/plugin install postmortem-lens --marketplace k-kudo-hub/postmortem-lens";
+const RUN = "/postmortem-lens:check";
 
 export default function App() {
-	const [status, setStatus] = useState<Status>({ kind: "idle" });
-	const [analysis, setAnalysis] = useState<VerifiedAnalysis | null>(null);
-	const [isSample, setIsSample] = useState(false);
-	const [marks, setMarks] = useState<Marks>({});
-
-	function show(result: VerifiedAnalysis, sample: boolean) {
-		setAnalysis(result);
-		setIsSample(sample);
-		setMarks({});
-	}
-
-	async function handleAnalyze(report: string, apiKey: string) {
-		setStatus({ kind: "running", receivedChars: 0 });
-		try {
-			const result = await analyzeReport({
-				report,
-				client: createClient(apiKey),
-				onProgress: (receivedChars) =>
-					setStatus({ kind: "running", receivedChars }),
-			});
-			show(result, false);
-			setStatus({ kind: "idle" });
-		} catch (error) {
-			setStatus({ kind: "error", message: toUserMessage(error) });
-		}
-	}
-
-	function handleSample() {
-		show(verifyAnalysis(SAMPLE_ANALYSIS, SAMPLE_REPORT), true);
-		setStatus({ kind: "idle" });
-	}
+	const weaknessCount = STOCK.reduce((n, i) => n + i.weaknesses.length, 0);
 
 	return (
 		<div className="page">
 			<header className="site-header">
 				<h1>postmortem-lens</h1>
 				<p className="tagline">
-					他社の障害報告を、自社に当てはめる観点と、今とれる対策に分解する
+					直近の大規模障害のストックで、自分のサービスの弱い箇所とその重要性に気づく
 				</p>
 			</header>
 
@@ -67,50 +30,57 @@ export default function App() {
 					<p>
 						1は仮にAIだとしても、そうした観点を持たなければ拾えません。このサービスはその観点と、実際の対策を提供します。
 					</p>
-					<p>
-						障害報告の本文を貼ると、
-						<strong>
-							きっかけ・連鎖・封じ込めの失敗・復旧が遅れた理由・再発防止
-						</strong>
-						の5つの項目ごとに、決まった観点で本文を読み、本文からの引用・自社への問い・今とれる対策を出します。
+					<p className="premise">
+						重要なのは、利用者が自身が公開しているサービスの脆弱性及びその重要性に気づけることだと思います。
 					</p>
 				</section>
 
-				<ReportForm
-					running={status.kind === "running"}
-					onAnalyze={handleAnalyze}
-					onSample={handleSample}
-				/>
-
-				{status.kind === "running" && (
-					<p className="status" role="status">
-						分解しています。長い報告では数分かかります（受け取った文字数:{" "}
-						{status.receivedChars.toLocaleString()}）
+				<section className="howto" aria-labelledby="howto-heading">
+					<h2 id="howto-heading">使い方</h2>
+					<p>
+						Claude Code のプラグインです。自分のサービスや OSS
+						のリポジトリで実行すると、下のストックの障害と同じ起き方で止まりうる弱い箇所を、重要な順に、根拠のファイルと行・障害の報告からの引用・今とれる対策つきで出します。
 					</p>
-				)}
-				{status.kind === "error" && (
-					<p className="error" role="alert">
-						{status.message}
+					<ol>
+						<li>
+							Claude Code で入れる
+							<pre>
+								<code>{INSTALL}</code>
+							</pre>
+						</li>
+						<li>
+							検査したいリポジトリで Claude Code を開き、実行する
+							<pre>
+								<code>{RUN}</code>
+							</pre>
+						</li>
+					</ol>
+					<p className="hint">
+						検査は利用者の Claude Code
+						の中で動き、リポジトリの中身を外部に送りません。ファイルの書き換えやコマンドの実行もしません。ライブラリの既知の脆弱性（CVE）は対象外です。それは
+						Dependabot のような脆弱性スキャナーで確かめてください。
 					</p>
-				)}
+				</section>
 
-				{analysis && (
-					<AnalysisView
-						analysis={analysis}
-						isSample={isSample}
-						marks={marks}
-						onMark={(viewpoint, mark) =>
-							setMarks((prev) => ({ ...prev, [viewpoint]: mark }))
-						}
-					/>
-				)}
+				<section className="stock" aria-labelledby="stock-heading">
+					<h2 id="stock-heading">障害のストック</h2>
+					<p className="hint">
+						{STOCK.length} 件の障害・{weaknessCount}{" "}
+						個の弱い箇所。事業者が公開した一次報告だけを集め、引用は報告の本文と突き合わせています。毎週足していきます。
+					</p>
+					{STOCK.map((incident) => (
+						<IncidentCard key={incident.id} incident={incident} />
+					))}
+				</section>
 			</main>
 
 			<footer className="site-footer">
 				<p>
-					分解には
-					Claude（Anthropic）を使います。引用は本文と突き合わせ、そのまま見つかったものだけを表示します。読み解き・問い・対策は
-					AI が書いたもので、正しさは読み手が確かめてください。
+					引用の著作権は各事業者にあります。弱い箇所の読み解きと対策は
+					postmortem-lens が書いたもので、正しさは読み手が確かめてください。
+				</p>
+				<p>
+					<a href="https://github.com/k-kudo-hub/postmortem-lens">GitHub</a>
 				</p>
 			</footer>
 		</div>

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { analysisSchema } from "./schema";
 import { SECTIONS, VIEWPOINTS, viewpointsOf } from "./viewpoints";
 
 describe("観点の一覧", () => {
@@ -33,30 +32,5 @@ describe("観点の一覧", () => {
 			expect(v.title).not.toBe("");
 			expect(v.question).toMatch(/か。?$/);
 		}
-	});
-});
-
-describe("出力のスキーマ", () => {
-	it("観点の id を一覧にあるものだけに限る", () => {
-		const base = {
-			incident: "テスト障害",
-			summary: "要約",
-			findings: [
-				{
-					viewpoint: VIEWPOINTS[0].id,
-					mentioned: true,
-					quotes: ["引用"],
-					reading: "読み解き",
-					question: "問い",
-					actions: [{ action: "対策", first_step: "最初の一歩" }],
-				},
-			],
-		};
-		expect(analysisSchema.safeParse(base).success).toBe(true);
-		const unknown = {
-			...base,
-			findings: [{ ...base.findings[0], viewpoint: "unknown.viewpoint" }],
-		};
-		expect(analysisSchema.safeParse(unknown).success).toBe(false);
 	});
 });

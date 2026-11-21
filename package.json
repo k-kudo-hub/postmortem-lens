@@ -14,7 +14,6 @@
 		"verify-quotes": "vitest run src/stock/quotes.test.ts"
 	},
 	"dependencies": {
-		"@anthropic-ai/sdk": "^1.12.0",
 		"react": "^19.3.1",
 		"react-dom": "^19.3.1",
 		"zod": "^4.6.7"

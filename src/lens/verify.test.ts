@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Analysis } from "./schema";
-import { isQuoteInSource, verifyAnalysis } from "./verify";
+import { isQuoteInSource } from "./verify";
 
 const source = `Root Cause
 The incident was caused by three main factors.
@@ -37,73 +36,5 @@ describe("isQuoteInSource", () => {
 	it("空の文字列と短すぎる文字列は根拠として認めない", () => {
 		expect(isQuoteInSource("", source)).toBe(false);
 		expect(isQuoteInSource("the", source)).toBe(false);
-	});
-});
-
-describe("verifyAnalysis", () => {
-	const analysis: Analysis = {
-		incident: "テスト",
-		summary: "要約",
-		findings: [
-			{
-				viewpoint: "trigger.latent-change",
-				mentioned: true,
-				quotes: [
-					"a latent defect caused Windows servers to become overwhelmed",
-					"This sentence does not exist in the report.",
-				],
-				reading: "読み解き",
-				question: "問い",
-				actions: [],
-			},
-		],
-	};
-
-	it("本文にない引用を外し、外した数を残す", () => {
-		const result = verifyAnalysis(analysis, source);
-		const finding = result.findings[0];
-		expect(finding.quotes).toEqual([
-			"a latent defect caused Windows servers to become overwhelmed",
-		]);
-		expect(finding.droppedQuotes).toBe(1);
-	});
-
-	it("同じ引用・同じ対策が重なって返ったときは、1つにまとめる", () => {
-		const quote =
-			"a latent defect caused Windows servers to become overwhelmed";
-		const action = { action: "対策", first_step: "一歩" };
-		const result = verifyAnalysis(
-			{
-				...analysis,
-				findings: [
-					{
-						...analysis.findings[0],
-						quotes: [quote, quote],
-						actions: [action, action],
-					},
-				],
-			},
-			source,
-		);
-		expect(result.findings[0].quotes).toEqual([quote]);
-		expect(result.findings[0].actions).toEqual([action]);
-		expect(result.findings[0].droppedQuotes).toBe(0);
-	});
-
-	it("引用がすべて外れた観点は、記述なしとして扱う", () => {
-		const result = verifyAnalysis(
-			{
-				...analysis,
-				findings: [
-					{
-						...analysis.findings[0],
-						quotes: ["This sentence does not exist in the report."],
-					},
-				],
-			},
-			source,
-		);
-		expect(result.findings[0].mentioned).toBe(false);
-		expect(result.findings[0].droppedQuotes).toBe(1);
 	});
 });

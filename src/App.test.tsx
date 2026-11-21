@@ -1,129 +1,57 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import App from "./App";
-import { verifyAnalysis } from "./lens/verify";
-import { SAMPLE_ANALYSIS } from "./sample/analysis";
-import { SAMPLE_REPORT } from "./sample/report";
+import { STOCK } from "./stock/stock";
 
-const analyzeReport = vi.fn();
-vi.mock("./lens/analyze", async (importOriginal) => {
-	const original = await importOriginal<typeof import("./lens/analyze")>();
-	return {
-		...original,
-		analyzeReport: (...args: unknown[]) => analyzeReport(...args),
-		createClient: vi.fn(() => ({})),
-	};
-});
-
-beforeEach(() => {
-	analyzeReport.mockReset();
-	localStorage.clear();
-});
-
-describe("画面", () => {
-	it("見本を見ると、API キーなしで5つの項目に分解した結果が出る", async () => {
-		const user = userEvent.setup();
+describe("公開ページ", () => {
+	it("著者の前提と主張を載せる", () => {
 		render(<App />);
-		await user.click(screen.getByRole("button", { name: /見本を見る/ }));
-
-		for (const label of [
-			"きっかけ",
-			"連鎖",
-			"封じ込めの失敗",
-			"復旧が遅れた理由",
-			"再発防止",
-		]) {
-			expect(
-				screen.getByRole("heading", { level: 3, name: new RegExp(label) }),
-			).toBeInTheDocument();
-		}
 		expect(
-			screen.getByText("1つ目は、8月に入れた接続プールの設定変更である。"),
+			screen.getByText(
+				/重要なのは、利用者が自身が公開しているサービスの脆弱性及びその重要性に気づけること/,
+			),
 		).toBeInTheDocument();
-		expect(analyzeReport).not.toHaveBeenCalled();
-	});
-
-	it("本文と API キーを入れて分解すると、結果が出る", async () => {
-		analyzeReport.mockResolvedValue(
-			verifyAnalysis(SAMPLE_ANALYSIS, SAMPLE_REPORT),
-		);
-		const user = userEvent.setup();
-		render(<App />);
-		await user.type(screen.getByLabelText("Claude API キー"), "sk-ant-test");
-		await user.click(screen.getByLabelText("障害報告の本文"));
-		await user.paste(SAMPLE_REPORT);
-		await user.click(screen.getByRole("button", { name: "分解する" }));
-
 		expect(
-			await screen.findByRole("heading", {
-				level: 2,
-				name: /Example Pay 決済 API 障害/,
-			}),
+			screen.getByText(/このサービスはその観点と、実際の対策を提供します/),
 		).toBeInTheDocument();
-		expect(analyzeReport).toHaveBeenCalledWith(
-			expect.objectContaining({ report: SAMPLE_REPORT }),
-		);
 	});
 
-	it("分解しているあいだは、見本に切り替えられない", async () => {
-		analyzeReport.mockReturnValue(new Promise(() => {}));
-		const user = userEvent.setup();
+	it("プラグインの入れ方と使い方を載せる", () => {
 		render(<App />);
-		await user.type(screen.getByLabelText("Claude API キー"), "sk-ant-test");
-		await user.click(screen.getByLabelText("障害報告の本文"));
-		await user.paste("本文");
-		await user.click(screen.getByRole("button", { name: "分解する" }));
-		expect(screen.getByRole("button", { name: /見本を見る/ })).toBeDisabled();
-	});
-
-	it("API キーがないと分解のボタンを押せない", async () => {
-		const user = userEvent.setup();
-		render(<App />);
-		await user.click(screen.getByLabelText("障害報告の本文"));
-		await user.paste("本文");
-		expect(screen.getByRole("button", { name: "分解する" })).toBeDisabled();
-	});
-
-	it("失敗したときは、次に何をすればよいかを表示する", async () => {
-		const { AnalysisError } = await import("./lens/analyze");
-		analyzeReport.mockRejectedValue(
-			new AnalysisError("出力が途中で切れました。"),
-		);
-		const user = userEvent.setup();
-		render(<App />);
-		await user.type(screen.getByLabelText("Claude API キー"), "sk-ant-test");
-		await user.click(screen.getByLabelText("障害報告の本文"));
-		await user.paste("本文");
-		await user.click(screen.getByRole("button", { name: "分解する" }));
-		expect(await screen.findByRole("alert")).toHaveTextContent(
-			"出力が途中で切れました。",
-		);
-	});
-
-	it("当てはまると印を付けた観点が、会議用の Markdown に入る", async () => {
-		const user = userEvent.setup();
-		render(<App />);
-		await user.click(screen.getByRole("button", { name: /見本を見る/ }));
-
-		const card = screen.getByRole("article", { name: "眠っていた変更" });
-		await user.click(within(card).getByRole("radio", { name: "当てはまる" }));
-
-		const markdown = screen.getByLabelText(
-			"会議用の Markdown",
-		) as HTMLTextAreaElement;
-		expect(markdown.value.split("## 当てはまる")[1]).toContain(
-			"きっかけ: 眠っていた変更",
-		);
-	});
-
-	it("記述のなかった観点も、問いだけは一覧で見られる", async () => {
-		const user = userEvent.setup();
-		render(<App />);
-		await user.click(screen.getByRole("button", { name: /見本を見る/ }));
 		expect(
-			screen.getByText(/この報告に記述がなかった観点/),
+			screen.getByText(
+				"/plugin install postmortem-lens --marketplace k-kudo-hub/postmortem-lens",
+			),
 		).toBeInTheDocument();
-		expect(screen.getByText("欠けたままの容量")).toBeInTheDocument();
+		expect(screen.getByText("/postmortem-lens:check")).toBeInTheDocument();
+	});
+
+	it("ストックの障害を新しい順にすべて並べる", () => {
+		render(<App />);
+		const titles = screen
+			.getAllByRole("heading", { level: 3 })
+			.map((h) => h.textContent);
+		expect(titles).toEqual(STOCK.map((i) => i.title));
+	});
+
+	it("障害ごとに、出典へのリンクと弱い箇所（引用・探すもの・対策）を出す", async () => {
+		const user = userEvent.setup();
+		render(<App />);
+		const incident = STOCK[0];
+		const card = screen.getByRole("article", { name: incident.title });
+		expect(within(card).getByRole("link", { name: /出典/ })).toHaveAttribute(
+			"href",
+			incident.source.url,
+		);
+
+		await user.click(within(card).getByText(/弱い箇所/));
+		const weakness = incident.weaknesses[0];
+		expect(within(card).getByText(weakness.title)).toBeInTheDocument();
+		expect(within(card).getByText(weakness.quotes[0])).toBeInTheDocument();
+		expect(within(card).getByText(weakness.lookFor[0])).toBeInTheDocument();
+		expect(
+			within(card).getByText(weakness.countermeasures[0].action),
+		).toBeInTheDocument();
 	});
 });
