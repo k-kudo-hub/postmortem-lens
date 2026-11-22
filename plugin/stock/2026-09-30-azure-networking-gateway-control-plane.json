@@ -7,9 +7,9 @@
 	"duration": "約5時間45分（2026-09-30 20:30 UTC 〜 10-01 02:15 UTC）",
 	"source": {
 		"title": "Post Incident Review (PIR) – Network Connectivity – Gateway service degradation in multiple regions（Tracking ID: 7Q30-010）",
-		"url": "https://azure.status.microsoft/en-us/status/history/",
+		"url": "https://azure.status.microsoft/en-us/status/history/?trackingId=7Q30-010",
 		"publisher": "Microsoft",
-		"note": "Azure status history の Tracking ID 7Q30-010 の項。履歴ページは直近の報告だけを載せるため、古くなると読めなくなる"
+		"note": "Azure status history の Tracking ID 7Q30-010 の報告。Microsoft は各報告を5年間残すとしている"
 	},
 	"summary": "一時的に止めていたゲートウェイの OS 更新が、期限切れで一斉に再開し、再起動と設定の取得の要求が共有のコントロールプレーンに押し寄せた。以前の変更で処理時間が延びていたことが重なってコントロールプレーンがあふれ、多くのリージョンで管理の操作が失敗した。ExpressRoute では、設定が戻る前に正常と判定されたインスタンスのせいで接続も切れた。",
 	"weaknesses": [

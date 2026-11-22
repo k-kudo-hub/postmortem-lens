@@ -32,6 +32,17 @@ export const weaknessSchema = z.object({
 	countermeasures: z.array(countermeasureSchema).min(1),
 });
 
+/**
+ * Azure status history の既定の表示は直近の報告だけを並べるため、古くなった障害の報告を開けなくなる。
+ * `?trackingId=` を付けると、報告を残す5年のあいだ、その障害の報告だけを表示する。
+ */
+function hasAzureTrackingId(url: string): boolean {
+	const u = new URL(url);
+	if (u.hostname !== "azure.status.microsoft") return true;
+	if (!/\/status\/history\/?$/.test(u.pathname)) return true;
+	return (u.searchParams.get("trackingId") ?? "") !== "";
+}
+
 export const incidentSchema = z.object({
 	/** 発生日と内容を表す id。ファイル名と同じにする */
 	id: z.string().regex(/^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/),
@@ -48,7 +59,12 @@ export const incidentSchema = z.object({
 	/** 一次情報 */
 	source: z.object({
 		title: z.string().min(1),
-		url: z.url({ protocol: /^https$/ }),
+		url: z
+			.url({ protocol: /^https$/ })
+			.refine(
+				hasAzureTrackingId,
+				"Azure の履歴ページは、Tracking ID 付きのリンク（?trackingId=）にしてください",
+			),
 		publisher: z.string().min(1),
 		/** 一次情報の出どころの補足（転載を読んだ場合の、原本の置き場所） */
 		note: z.string().optional(),
