@@ -56,10 +56,77 @@ describe("ストックのスキーマ", () => {
 	});
 
 	it("出典の URL は https だけを受け付ける", () => {
-		for (const url of ["javascript:alert(1)", "http://example.com/pir"]) {
+		for (const url of [
+			"javascript:alert(1)",
+			"http://example.com/pir",
+			"not a url",
+		]) {
 			const broken = { ...valid, source: { ...valid.source, url } };
 			expect(incidentSchema.safeParse(broken).success, url).toBe(false);
 		}
+	});
+
+	describe("Azure の履歴ページを出典にするときは、その報告の Tracking ID 付きのリンクだけを受け付ける", () => {
+		const withSource = (
+			url: string,
+			title = "PIR（Tracking ID: 7Q30-010）",
+		) => ({
+			...valid,
+			source: { ...valid.source, title, url },
+		});
+		const base = "https://azure.status.microsoft/en-us/status/history/";
+
+		it("出典の名前と同じ Tracking ID が付いたリンクを受け付ける", () => {
+			for (const url of [
+				`${base}?trackingId=7Q30-010`,
+				"https://azure.status.microsoft/ja-jp/status/history?trackingId=7Q30-010",
+			]) {
+				expect(incidentSchema.safeParse(withSource(url)).success, url).toBe(
+					true,
+				);
+			}
+			expect(
+				incidentSchema.safeParse(
+					withSource(
+						`${base}?trackingId=1K80-N_8`,
+						"PIR（Tracking ID 1K80-N_8）",
+					),
+				).success,
+			).toBe(true);
+		});
+
+		it("Tracking ID のないリンクは、旧ドメインと末尾が点のホスト名も含めて受け付けない", () => {
+			for (const url of [
+				base,
+				`${base}?trackingId=`,
+				`${base}?trackingId=%20`,
+				`${base}#7Q30-010`,
+				"https://status.azure.com/en-us/status/history/",
+				"https://azure.status.microsoft./en-us/status/history/",
+			]) {
+				expect(incidentSchema.safeParse(withSource(url)).success, url).toBe(
+					false,
+				);
+			}
+		});
+
+		it("出典の名前にない Tracking ID のリンクは受け付けない", () => {
+			expect(
+				incidentSchema.safeParse(withSource(`${base}?trackingId=7QL5-Z50`))
+					.success,
+			).toBe(false);
+		});
+
+		it("履歴ページ以外の Azure のページと、ほかのサイトは対象にしない", () => {
+			for (const url of [
+				"https://azure.status.microsoft/en-us/status",
+				"https://example.com/status/history/",
+			]) {
+				expect(incidentSchema.safeParse(withSource(url)).success, url).toBe(
+					true,
+				);
+			}
+		});
 	});
 
 	it("障害の中で、弱い箇所の id が重なるものは受け付けない", () => {
