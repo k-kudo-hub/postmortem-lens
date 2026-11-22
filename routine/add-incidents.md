@@ -54,7 +54,7 @@
 
 一覧のページではなく、その報告だけを開けるリンクにする。一覧のページは新しい報告に押し出され、古くなると出典から報告を読めなくなる。
 
-- Azure: 履歴ページに報告の Tracking ID を付けた `https://azure.status.microsoft/en-us/status/history/?trackingId={Tracking ID}` にする（例: `?trackingId=7Q30-010`）。Microsoft は各報告を5年間残すとしており、このリンクはそのあいだ、その報告だけを表示する。Tracking ID のないリンクはスキーマの検証（`npm test`）で失敗する
+- Azure: 履歴ページに報告の Tracking ID を付けた `https://azure.status.microsoft/en-us/status/history/?trackingId={Tracking ID}` にする（例: `?trackingId=7Q30-010`）。Tracking ID は、報告の見出しの下にある `Tracking ID: 7Q30-010` の値で、`source.title` の末尾にも `（Tracking ID: 7Q30-010）` の形で書く。Microsoft は各報告を5年間残すとしており、このリンクはそのあいだ、その報告だけを表示する。Tracking ID がない、または `source.title` の Tracking ID と違うリンクは、スキーマの検証（`npm test`）で失敗する
 - Google Cloud: 障害ごとのページ `https://status.cloud.google.com/incidents/{障害の id}` にする
 - ブログ・PDF の報告: その報告の記事・ファイルの URL にする
 
@@ -63,8 +63,10 @@
 一次報告の本文を、`scripts/fetch-source.py` でテキストにしてリポジトリの外に保存する。WebFetch の結果はモデルが処理した文で、本文が一字一句そのままにならないため、突き合わせには使わない。
 
 ```bash
-python3 scripts/fetch-source.py /tmp/postmortem-sources {障害の id}={一次報告の URL}
+python3 scripts/fetch-source.py /tmp/postmortem-sources '{障害の id}={一次報告の URL}'
 ```
+
+- URL に `?` が入ることがあるため、引数は引用符で囲む
 
 - HTML はタグを除いたテキストに、PDF は `pdftotext` でテキストになる。`pdftotext` がなければ `apt-get install -y poppler-utils` で入れる
 - Google Cloud の `incidents.json` は JSON のまま保存されるので、その障害の `Incident Report` の更新の本文（`updates[].text`）を取り出して、`/tmp/postmortem-sources/{障害の id}.txt` に保存し直す

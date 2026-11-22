@@ -32,53 +32,79 @@ export const weaknessSchema = z.object({
 	countermeasures: z.array(countermeasureSchema).min(1),
 });
 
+/** Azure status history のホスト名（status.azure.com は旧ドメインで、Tracking ID を落として転送される） */
+const AZURE_STATUS_HOSTS = ["azure.status.microsoft", "status.azure.com"];
+
+/** Tracking ID の形（例: 7Q30-010、1K80-N_8） */
+const AZURE_TRACKING_ID = /^[A-Za-z0-9_]+-[A-Za-z0-9_]+$/;
+
 /**
- * Azure status history の既定の表示は直近の報告だけを並べるため、古くなった障害の報告を開けなくなる。
- * `?trackingId=` を付けると、報告を残す5年のあいだ、その障害の報告だけを表示する。
+ * Azure status history を指す URL なら、付いている Tracking ID を返す（付いていなければ空文字）。
+ * Azure status history を指さない URL なら undefined を返す。
+ *
+ * 履歴ページの既定の表示は直近の報告だけを並べるため、古くなった障害の報告を開けなくなる。
+ * `?trackingId=` を付けると、Microsoft が報告を残す5年のあいだ、その障害の報告だけを表示する。
  */
-function hasAzureTrackingId(url: string): boolean {
+function azureTrackingId(url: string): string | undefined {
+	if (!URL.canParse(url)) return undefined;
 	const u = new URL(url);
-	if (u.hostname !== "azure.status.microsoft") return true;
-	if (!/\/status\/history\/?$/.test(u.pathname)) return true;
-	return (u.searchParams.get("trackingId") ?? "") !== "";
+	const host = u.hostname.replace(/\.$/, "");
+	if (!AZURE_STATUS_HOSTS.includes(host)) return undefined;
+	if (!/\/status\/history\/?$/.test(u.pathname)) return undefined;
+	const id = (u.searchParams.get("trackingId") ?? "").trim();
+	return AZURE_TRACKING_ID.test(id) ? id : "";
 }
 
-export const incidentSchema = z.object({
-	/** 発生日と内容を表す id。ファイル名と同じにする */
-	id: z.string().regex(/^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/),
-	/** 障害の名前 */
-	title: z.string().min(1),
-	/** 報告を出した事業者 */
-	provider: z.string().min(1),
-	/** 止まったサービス */
-	service: z.string().min(1),
-	/** 発生日（YYYY-MM-DD、UTC） */
-	startedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-	/** 影響が続いた時間 */
-	duration: z.string().min(1),
-	/** 一次情報 */
-	source: z.object({
+export const incidentSchema = z
+	.object({
+		/** 発生日と内容を表す id。ファイル名と同じにする */
+		id: z.string().regex(/^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/),
+		/** 障害の名前 */
 		title: z.string().min(1),
-		url: z
-			.url({ protocol: /^https$/ })
+		/** 報告を出した事業者 */
+		provider: z.string().min(1),
+		/** 止まったサービス */
+		service: z.string().min(1),
+		/** 発生日（YYYY-MM-DD、UTC） */
+		startedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+		/** 影響が続いた時間 */
+		duration: z.string().min(1),
+		/** 一次情報 */
+		source: z.object({
+			title: z.string().min(1),
+			url: z.url({ protocol: /^https$/ }),
+			publisher: z.string().min(1),
+			/** 一次情報の出どころの補足（転載を読んだ場合の、原本の置き場所） */
+			note: z.string().optional(),
+		}),
+		/** 障害の要約（3文以内） */
+		summary: z.string().min(1),
+		weaknesses: z
+			.array(weaknessSchema)
+			.min(1)
 			.refine(
-				hasAzureTrackingId,
-				"Azure の履歴ページは、Tracking ID 付きのリンク（?trackingId=）にしてください",
+				(ws) => new Set(ws.map((w) => w.id)).size === ws.length,
+				"弱い箇所の id が重なっています",
 			),
-		publisher: z.string().min(1),
-		/** 一次情報の出どころの補足（転載を読んだ場合の、原本の置き場所） */
-		note: z.string().optional(),
-	}),
-	/** 障害の要約（3文以内） */
-	summary: z.string().min(1),
-	weaknesses: z
-		.array(weaknessSchema)
-		.min(1)
-		.refine(
-			(ws) => new Set(ws.map((w) => w.id)).size === ws.length,
-			"弱い箇所の id が重なっています",
-		),
-});
+	})
+	.superRefine((incident, ctx) => {
+		const id = azureTrackingId(incident.source.url);
+		if (id === undefined) return;
+		if (id === "") {
+			ctx.addIssue({
+				code: "custom",
+				path: ["source", "url"],
+				message:
+					"Azure の履歴ページは、Tracking ID 付きのリンク（?trackingId=）にしてください",
+			});
+		} else if (!incident.source.title.includes(id)) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["source", "url"],
+				message: `リンクの Tracking ID（${id}）が、出典の名前にありません`,
+			});
+		}
+	});
 
 export type Countermeasure = z.infer<typeof countermeasureSchema>;
 export type Weakness = z.infer<typeof weaknessSchema>;
