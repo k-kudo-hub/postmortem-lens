@@ -18,7 +18,7 @@
 
 | 出どころ | URL |
 |----------|-----|
-| Azure status history（PIR） | https://azure.status.microsoft/en-us/status/history/ |
+| Azure status history（PIR） | https://azure.status.microsoft/en-us/status/history/ （出典にするときは下の「出典の URL」） |
 | Google Cloud の障害の一覧（JSON。`Incident Report` を含む更新が報告） | https://status.cloud.google.com/incidents.json |
 | AWS Post-Event Summaries | https://aws.amazon.com/premiumsupport/technology/pes/ |
 | Cloudflare ブログの post-mortem | https://blog.cloudflare.com/tag/post-mortem/ |
@@ -44,10 +44,19 @@
 - `viewpoint` は `src/lens/viewpoints.ts` の観点の一覧の id から選ぶ。一覧にない観点は作らない
 - `quotes` は一次報告の本文の文字列を1文字も変えずに写す（英語の報告は英語のまま）
 - `lookFor` は、利用者のリポジトリで探すものを、ファイルの種類・設定の名前・コードの形で具体的に書く（例: 「Kubernetes の livenessProbe が、データベースへの接続を確かめるエンドポイントを叩いている設定」）
+- `source.url` は、その報告だけを開けるリンクにする（下の「出典の URL」）
 - `whatHappened` は日本語で、報告に書かれていることだけをもとに書く
 - `reportedFixes` には、報告が挙げた対策を一次報告の本文の文字列のまま写す。報告に対策がなければ空の配列にする
 - `countermeasures` は、報告の対策を、利用者のリポジトリで今とれる形に一般化して日本語で書く。`whatHappened` と同じ仕組みに効く対策だけにする
 - 報告の中でうまく働いた仕組み（例: 最後に正しかった設定で自動で戻った）は、弱い箇所にしない
+
+#### 出典の URL
+
+一覧のページではなく、その報告だけを開けるリンクにする。一覧のページは新しい報告に押し出され、古くなると出典から報告を読めなくなる。
+
+- Azure: 履歴ページに報告の Tracking ID を付けた `https://azure.status.microsoft/en-us/status/history/?trackingId={Tracking ID}` にする（例: `?trackingId=7Q30-010`）。Microsoft は各報告を5年間残すとしており、このリンクはそのあいだ、その報告だけを表示する。Tracking ID のないリンクはスキーマの検証（`npm test`）で失敗する
+- Google Cloud: 障害ごとのページ `https://status.cloud.google.com/incidents/{障害の id}` にする
+- ブログ・PDF の報告: その報告の記事・ファイルの URL にする
 
 ### 4. 確かめる
 
@@ -59,7 +68,7 @@ python3 scripts/fetch-source.py /tmp/postmortem-sources {障害の id}={一次�
 
 - HTML はタグを除いたテキストに、PDF は `pdftotext` でテキストになる。`pdftotext` がなければ `apt-get install -y poppler-utils` で入れる
 - Google Cloud の `incidents.json` は JSON のまま保存されるので、その障害の `Incident Report` の更新の本文（`updates[].text`）を取り出して、`/tmp/postmortem-sources/{障害の id}.txt` に保存し直す
-- Azure status history のページには直近の報告がすべて並ぶので、そのまま保存してよい
+- Azure の報告は、出典と同じ Tracking ID 付きの URL（`?trackingId=`）で取得する。そのページにはその報告だけが載る
 
 保存したら、次を実行する。すべて成功するまで直す。
 
