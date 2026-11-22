@@ -81,7 +81,7 @@
   - `src/cartservice/src/services/HealthCheckService.cs:37` — readiness と liveness が使う gRPC のヘルスチェックは、この `Ping()` の結果をそのまま返す
   - `kubernetes-manifests/cartservice.yaml:59-67` — readinessProbe はこのヘルスチェックを見ており、`minReadySeconds` もない
 - 同じ起き方をした障害:
-  - [止めていた更新が一斉に再開し、Azure のネットワークのコントロールプレーンがあふれた障害](https://azure.status.microsoft/en-us/status/history/)（2026-09-30、Microsoft）: 再起動したゲートウェイが、設定と経路の情報を戻しきる前に正常と判定され、冗長化した相方の更新が先に進んだため、両方とも経路の設定を取れずに接続が切れた。
+  - [止めていた更新が一斉に再開し、Azure のネットワークのコントロールプレーンがあふれた障害](https://azure.status.microsoft/en-us/status/history/?trackingId=7Q30-010)（2026-09-30、Microsoft）: 再起動したゲートウェイが、設定と経路の情報を戻しきる前に正常と判定され、冗長化した相方の更新が先に進んだため、両方とも経路の設定を取れずに接続が切れた。
     > Gateway instances restarting during the update process were marked healthy before their configuration and routing state had been fully restored.
 
     報告が挙げた対策:
