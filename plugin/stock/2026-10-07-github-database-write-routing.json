@@ -1,0 +1,86 @@
+{
+	"id": "2026-10-07-github-database-write-routing",
+	"title": "新しい機械の古い記録でデータベースの書き込み先が誤り、同じ原因で再発した GitHub の書き込み障害",
+	"provider": "GitHub",
+	"service": "github.com（データベースへの書き込み）",
+	"startedAt": "2026-10-07",
+	"duration": "2回の書き込み障害（各約10分と約9分。2026-10-07 15:14 UTC と 17:17 UTC）",
+	"source": {
+		"title": "GitHub availability report: October 2026（10月7日の項）",
+		"url": "https://github.blog/news-insights/company-news/github-availability-report-october-2026/",
+		"publisher": "GitHub",
+		"note": "月次の availability report の、該当する日付の項"
+	},
+	"summary": "保守で交換した、書き込み先を管理する機械が古い記録を持ったまま自動でリーダーに選ばれ、退役したデータベースへ書き込みを向ける設定を公開した。設定は検証を通り、すぐ反映された。自動の保守作業が一時停止を守らず、同じ機械が再びリーダーになって再発した。",
+	"weaknesses": [
+		{
+			"id": "stale-records-on-new-node",
+			"viewpoint": "trigger.latent-change",
+			"title": "新しい機械が古い記録のまま自動でリーダーになる",
+			"whatHappened": "保守で入れた機械が、退役したデータベースを残した古い記録のままリーダーに選ばれ、書き込みを退役したサーバーへ向ける設定を公開した。",
+			"quotes": [
+				"One new machine started with outdated records that still listed retired database servers.",
+				"Once it was automatically elected leader, it published routing settings that sent writes for several core databases to those retired servers."
+			],
+			"reportedFixes": [
+				"We improved how we retire database servers, so outdated records aren’t left behind.",
+				"We tightened controls on adding new machines that manage database routing, and making sure automated maintenance honors a pause."
+			],
+			"lookFor": [
+				"データベースの退役（廃止）の手順が、設定・サービスディスカバリ・DNS・ルーティングの記録を消す工程を含まないこと",
+				"新しいノードを、記録が最新だと確かめる前にリーダー選出の対象にする構成（Consul・etcd・Orchestrator・Patroni などの設定）",
+				"退役済みのホスト名や IP が残っている設定ファイル（接続先の一覧・Terraform の state・サービスの登録）"
+			],
+			"countermeasures": [
+				{
+					"action": "退役の手順書に、すべての記録（設定・登録・DNS）の削除を入れ、新しいノードは記録が同期されて確認できるまでリーダーの対象にしない",
+					"firstStep": "退役したデータベースのホスト名が、設定・登録のどこに残っているかを検索する"
+				}
+			]
+		},
+		{
+			"id": "routing-validation-gap",
+			"viewpoint": "trigger.test-gap",
+			"title": "誤った書き込み先の設定が検証を通り、すぐ反映される",
+			"whatHappened": "書き込み先の設定は既存の検証を通り、公開と同時に反映されたため、誤りが本番の書き込みに届いた。",
+			"quotes": [
+				"Incorrect settings passed our existing validation and took effect immediately."
+			],
+			"reportedFixes": [
+				"We strengthened validation of database routing settings, so incorrect settings are caught before they take effect."
+			],
+			"lookFor": [
+				"接続先・ルーティングの設定を、公開前に実在と疎通を確かめずに反映する作り（設定の配信・CI の検証がスキーマの形だけを見ている）",
+				"設定の変更を、段階的に広げずに全体へ即時に反映する仕組み"
+			],
+			"countermeasures": [
+				{
+					"action": "ルーティング設定は、反映前に接続先が現役で書き込めることを確かめ、一部のクライアントから段階的に反映する",
+					"firstStep": "設定の検証が、形式だけでなく接続先の実在まで見ているかを確かめる"
+				}
+			]
+		},
+		{
+			"id": "maintenance-ignores-pause",
+			"viewpoint": "recovery.auto-recovery-scope",
+			"title": "自動の保守作業が一時停止を守らず、同じ原因で再発する",
+			"whatHappened": "自動の保守作業が一時停止を守らずに再度リーダー選出を起こし、問題の機械がまだ残っていたため再びリーダーになり、2回目の障害になった。",
+			"quotes": [
+				"Later, an automated maintenance task did not honor a pause on maintenance and triggered another election, and because the new machine had not yet been removed, it became leader again."
+			],
+			"reportedFixes": [
+				"We tightened controls on adding new machines that manage database routing, and making sure automated maintenance honors a pause."
+			],
+			"lookFor": [
+				"自動の保守ジョブ（cron・CI のスケジュール・オペレーター）が、停止のフラグ（メンテナンスの一時停止）を確かめずに動く作り",
+				"原因の機械を切り離す前に、フェイルオーバーやリーダー選出を起こしうる自動の処理が残っている構成"
+			],
+			"countermeasures": [
+				{
+					"action": "すべての自動の保守ジョブが一時停止のフラグを実際に守ることを確かめ、障害の対応では原因のノードを先に切り離す",
+					"firstStep": "保守ジョブの一覧を作り、一時停止のフラグを読んでいるかをコードで確かめる"
+				}
+			]
+		}
+	]
+}
