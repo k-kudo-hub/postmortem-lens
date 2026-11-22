@@ -1,0 +1,54 @@
+name: Auto-merge weekly stock PR
+
+# 週次ルーチンの PR（claude/stock-* のブランチ）を、CI のすべてのチェックが成功したら自動でマージし、公開ページを更新する。
+# workflow_run は main にある定義で走るため、PR がこのワークフローを書き換えても判定は変わらない。
+# PR のコードは checkout せず、GitHub の API だけで判定する。
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'claude/stock-') &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      SHA: ${{ github.event.workflow_run.head_sha }}
+      HEAD_REF: ${{ github.event.workflow_run.head_branch }}
+      PR: ${{ github.event.workflow_run.pull_requests[0].number }}
+    steps:
+      - name: PR を確かめる
+        run: |
+          if [ -z "$PR" ]; then
+            echo "CI の実行に PR が結びついていないため、マージしない"
+            exit 1
+          fi
+      - name: ストックの外を変えた PR はマージしない
+        run: |
+          # 名前を変えたファイルは、変える前のパスも確かめる
+          others=$(gh api "repos/$REPO/pulls/$PR/files" --paginate \
+            --jq '.[] | .filename, (.previous_filename // empty) | select(test("^plugin/stock/[^/]+\\.json$") | not)')
+          if [ -n "$others" ]; then
+            printf 'ストックの外のファイルを変えているため、自動ではマージしません。\n\n```\n%s\n```\n' "$others" > body.md
+            gh api "repos/$REPO/issues/$PR/comments" -F body=@body.md
+            exit 1
+          fi
+      # チェックが成功した head と同じときだけマージする（後から push されたら、その push のチェックに任せる）
+      - run: gh api -X PUT "repos/$REPO/pulls/$PR/merge" -f merge_method=squash -f sha="$SHA"
+      # GITHUB_TOKEN による main への push では Deploy が動かないため、明示的に起動する
+      - run: gh workflow run deploy.yml --repo "$REPO" --ref main
+      # リポジトリの設定でマージ時にブランチが消える場合は、消せなくても失敗にしない
+      - run: gh api -X DELETE "repos/$REPO/git/refs/heads/$HEAD_REF" || true
