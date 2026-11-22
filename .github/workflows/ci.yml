@@ -21,4 +21,57 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      - run: python3 -m unittest discover -s scripts
       - run: npm run build
+
+  # PR で足した・変えた障害だけ、一次報告の本文を取得して引用を突き合わせる。
+  # 本文はジョブの中の一時ディレクトリに置くだけで、リポジトリにはコミットしない。
+  verify-quotes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # PDF の一次報告をテキストにする pdftotext を入れる
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+      - run: python3 scripts/verify-changed-quotes.py "origin/${{ github.base_ref }}"
+
+  # 週次ルーチンの PR（claude/stock-* のブランチで、ストックだけを変えたもの）を、
+  # すべてのチェックが成功したら自動でマージし、公開ページを更新する。
+  auto-merge:
+    needs: [check, verify-quotes]
+    if: >-
+      github.event_name == 'pull_request' &&
+      startsWith(github.head_ref, 'claude/stock-') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      SHA: ${{ github.event.pull_request.head.sha }}
+      HEAD_REF: ${{ github.head_ref }}
+    steps:
+      - name: ストックの外を変えた PR はマージしない
+        run: |
+          others=$(gh api "repos/${{ github.repository }}/pulls/$PR/files" --paginate \
+            --jq '.[].filename | select(test("^plugin/stock/[^/]+\\.json$") | not)')
+          if [ -n "$others" ]; then
+            printf 'ストックの外のファイルを変えているため、自動ではマージしません。\n\n```\n%s\n```\n' "$others" > body.md
+            gh api "repos/${{ github.repository }}/issues/$PR/comments" -F body=@body.md
+            exit 1
+          fi
+      # チェックした時点の head と同じときだけマージする（後から push されたら、その push のチェックに任せる）
+      - run: gh api -X PUT "repos/${{ github.repository }}/pulls/$PR/merge" -f merge_method=squash -f sha="$SHA"
+      - run: gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$HEAD_REF"
+      # GITHUB_TOKEN による main への push では Deploy が動かないため、明示的に起動する
+      - run: gh workflow run deploy.yml --repo "${{ github.repository }}" --ref main
