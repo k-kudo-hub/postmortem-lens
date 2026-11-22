@@ -62,6 +62,23 @@ describe("ストックのスキーマ", () => {
 		}
 	});
 
+	it("Azure の履歴ページを出典にするときは、Tracking ID 付きのリンクだけを受け付ける", () => {
+		const withSource = (url: string) => ({
+			...valid,
+			source: { ...valid.source, url },
+		});
+		const base = "https://azure.status.microsoft/en-us/status/history/";
+		expect(
+			incidentSchema.safeParse(withSource(`${base}?trackingId=7Q30-010`))
+				.success,
+		).toBe(true);
+		for (const url of [base, `${base}?trackingId=`, `${base}#7Q30-010`]) {
+			expect(incidentSchema.safeParse(withSource(url)).success, url).toBe(
+				false,
+			);
+		}
+	});
+
 	it("障害の中で、弱い箇所の id が重なるものは受け付けない", () => {
 		const broken = {
 			...valid,
