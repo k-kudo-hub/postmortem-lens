@@ -1,0 +1,83 @@
+{
+	"id": "2026-10-05-github-actions-job-assignment",
+	"title": "依存先への呼び出しが待ち続け、フェイルオーバー先も容量が足りず、GitHub Actions のジョブが起動しなかった障害",
+	"provider": "GitHub",
+	"service": "GitHub Actions（GitHub-hosted runners）",
+	"startedAt": "2026-10-05",
+	"duration": "約3時間45分（2026-10-05 19:11 UTC 〜）",
+	"source": {
+		"title": "GitHub availability report: October 2026（10月5日の項）",
+		"url": "https://github.blog/news-insights/company-news/github-availability-report-october-2026/",
+		"publisher": "GitHub",
+		"note": "月次の availability report の、該当する日付の項"
+	},
+	"summary": "クラウド事業者側の部分的なネットワーク障害で、ジョブを割り当てるサービスがデータベースへの呼び出しの完了を待ち続け、メモリを使い切って再起動した。ジョブが移った別リージョンも容量が足りずに失敗し、ランナーも減った。原因の特定に時間がかかった。",
+	"weaknesses": [
+		{
+			"id": "no-fail-fast",
+			"viewpoint": "trigger.external-dependency",
+			"title": "依存先の不調で、呼び出しが失敗せずに待ち続ける",
+			"whatHappened": "部分的なネットワーク障害で、ジョブ割り当てのサービスはデータベースへの呼び出しを早く失敗させず、待つ呼び出しが積み上がってメモリを使い切り、再起動した。",
+			"quotes": [
+				"Instead of failing fast, the service waited for those calls to time out.",
+				"The waiting calls piled up until the service ran out of memory and restarted."
+			],
+			"reportedFixes": [],
+			"lookFor": [
+				"データベース・キャッシュ・外部 API への呼び出しにタイムアウトを設定していない、または長い HTTP クライアント・接続プールの設定",
+				"同時に待てる呼び出しの数に上限（bulkhead・同時実行数の制限）を設けていないコード",
+				"サーキットブレーカーを使っていない、依存先ごとの呼び出し"
+			],
+			"countermeasures": [
+				{
+					"action": "依存先への呼び出しに短いタイムアウトと同時実行数の上限を付け、依存先が遅いときは待たせずに早く失敗させる",
+					"firstStep": "DB・外部 API のクライアントごとに、タイムアウトの設定値と未設定の箇所を一覧にする"
+				}
+			]
+		},
+		{
+			"id": "failover-region-capacity",
+			"viewpoint": "cascade.redistribution",
+			"title": "フェイルオーバー先に、移ってきた負荷を受ける容量がない",
+			"whatHappened": "ジョブが移った健康なリージョンのサービスは、増えた負荷を受ける容量がなく、同じく失敗した。同時に、ジョブを受け取れなかったランナーが止まり、使える台数が減った。",
+			"quotes": [
+				"Jobs then shifted to the same service in a healthy region, which did not have enough capacity for the extra demand and began failing too."
+			],
+			"reportedFixes": [
+				"We are making the service that assigns jobs to GitHub-hosted runners better able to handle sudden increases in load, so it keeps up when another region shifts extra jobs to it."
+			],
+			"lookFor": [
+				"複数リージョン構成で、リージョンごとのオートスケールの上限・最小台数が、1リージョンぶんの追加の負荷を想定していない設定（Terraform・Kubernetes の HPA・ASG の max/min）",
+				"フェイルオーバーの設定（DNS・ロードバランサの重み）が、残りのリージョンの余力を確かめずに全量を移す作り"
+			],
+			"countermeasures": [
+				{
+					"action": "1つのリージョンが止まったとき、残りのリージョンが全量を受けられるかを数字で確かめ、足りなければ上限と最小台数を見直す",
+					"firstStep": "リージョンごとのスケールの上限と、通常時のピークの使用率を並べて見る"
+				}
+			]
+		},
+		{
+			"id": "partial-network-failure-diagnosis",
+			"viewpoint": "recovery.diagnosis",
+			"title": "部分的なネットワーク障害の原因の特定に時間がかかる",
+			"whatHappened": "サービスを再デプロイしても回復せず、ネットワーク障害が原因だと突き止めるまで時間がかかった。その間、ほかのサービスも失敗し続けた。",
+			"quotes": [
+				"We redeployed the service that assigns jobs to GitHub-hosted runners, but it did not recover. We traced the failures to the networking issue."
+			],
+			"reportedFixes": [
+				"We are improving how quickly we detect and locate partial network failures between our datacenters and the cloud-hosted services they depend on."
+			],
+			"lookFor": [
+				"依存先ごと・接続元ごとの呼び出しの失敗率とレイテンシを計測していないこと（メトリクス・ダッシュボード・アラートの定義）",
+				"障害時の手順書（runbook）が、再デプロイしか挙げておらず、依存先への接続の確認を含まない"
+			],
+			"countermeasures": [
+				{
+					"action": "依存先ごとの呼び出しの失敗とレイテンシを分けて計測し、アラートにする。手順書に、再デプロイの前に依存先への接続を確かめる項目を足す",
+					"firstStep": "いまのダッシュボードで、依存先ごとの失敗率が見られるかを確かめる"
+				}
+			]
+		}
+	]
+}
