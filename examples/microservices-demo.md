@@ -2,6 +2,8 @@
 
 公開されている OSS（[GoogleCloudPlatform/microservices-demo](https://github.com/GoogleCloudPlatform/microservices-demo)、コミット `c7cb6d5`）で `/postmortem-lens:check` を実行した結果（2026-11-21、このリポジトリのコミット `af760df` のプラグイン、障害6件・弱い箇所24個のストック）。出力をそのまま載せている。
 
+> この実行のあと、Microsoft 365 の障害（2026-11-12）はストックから外した。Microsoft が報告を管理センターの外に公開しておらず、出典にしていた転載の PDF のリンクが、PDF ではなく転載元のサイトの記事に転送されるようになったため。下の結果のうち、その障害に結びつけた箇所（弱い箇所4と、「Microsoft 365 の障害」と書いた項目）は、いまのストックにない障害を根拠にしている。
+
 ---
 
 # postmortem-lens の検査結果: microservices-demo（Online Boutique）

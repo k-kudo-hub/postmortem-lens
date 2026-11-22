@@ -147,10 +147,9 @@ describe("ストックのスキーマ", () => {
 });
 
 describe("ストック", () => {
-	it("2026年に起きた障害を5件以上持ち、Microsoft 365 の障害を含む", () => {
+	it("2026年に起きた障害を5件以上持つ", () => {
 		expect(STOCK.length).toBeGreaterThanOrEqual(5);
 		expect(STOCK.every((i) => i.startedAt.startsWith("2026-"))).toBe(true);
-		expect(STOCK.some((i) => i.service === "Microsoft 365")).toBe(true);
 	});
 
 	it("障害の id は重ならない", () => {
