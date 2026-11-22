@@ -63,6 +63,13 @@ Claude Code v2.1.275 以降で、次を実行してプラグインを入れま�
 - 引用は、一次報告の本文と機械的に突き合わせ、そのまま見つかったものだけを置いています。一次報告の本文は著作権があるためリポジトリに置いていません
 - 毎週、クラウドの Claude Code ルーチンが [`routine/add-incidents.md`](routine/add-incidents.md) の手順で新しい一次報告を探し、ストックに足す PR を作ります
 
+### 週次 PR が確かめられ、マージされるまで
+
+1. ルーチンが `claude/stock-{日付}` のブランチで、ストックに障害を足す PR を作ります
+2. CI（`.github/workflows/ci.yml`）が、テスト・型チェック・Lint・ビルドに加えて、その PR で足した・変えた障害だけ、出典の URL から一次報告の本文を取得して引用を突き合わせます（`scripts/verify-changed-quotes.py`）。本文は CI の一時ディレクトリに置くだけで、リポジトリには残しません。既存の障害は突き合わせ直しません
+3. すべてのチェックが成功し、PR がストック（`plugin/stock/*.json`）だけを変えていれば、CI が PR を squash でマージし、ブランチを消し、公開ページを更新します。人の確認は挟みません
+4. チェックが失敗した PR は、マージされずに残ります。失敗したチェックのログに理由が出ます。ストックの外のファイルを変えた PR には、自動でマージしなかった理由をコメントします
+
 ## 分かっている制限
 
 - 弱い箇所の判定と重要度は Claude が書いたものです。根拠のファイルと行を開いて、正しさを確かめてください
@@ -81,7 +88,9 @@ npm run dev      # ストックの一覧のページを http://localhost:5173/ �
 | コマンド | すること |
 |----------|----------|
 | `npm test` | テスト（Vitest）。ストックがスキーマに合っているかも確かめる |
-| `SOURCES_DIR=… npm run verify-quotes` | ストックの引用を一次報告の本文と突き合わせる。本文を `{SOURCES_DIR}/{障害の id}.txt` に置いて実行する |
+| `SOURCES_DIR=… npm run verify-quotes` | ストックの引用を一次報告の本文と突き合わせる。本文を `{SOURCES_DIR}/{障害の id}.txt` に置いて実行する。`INCIDENT_IDS`（カンマ区切りの障害の id）で対象を絞れる |
+| `python3 scripts/verify-changed-quotes.py origin/main` | `origin/main` から足した・変えた障害だけ、一次報告の本文を取得して引用を突き合わせる（PDF の報告には `pdftotext` が要る） |
+| `python3 -m unittest discover -s scripts` | スクリプトのテスト |
 | `npm run typecheck` | 型チェック |
 | `npm run lint` | Lint と Format の確認（Biome） |
 | `npm run build` | ストックの一覧のページを `dist/` にビルドする |
@@ -91,7 +100,7 @@ npm run dev      # ストックの一覧のページを http://localhost:5173/ �
 
 ### 公開のしくみ
 
-`main` に push すると、GitHub Actions（`.github/workflows/deploy.yml`）がストックの一覧のページを GitHub Pages に公開します。
+`main` に push すると、GitHub Actions（`.github/workflows/deploy.yml`）がストックの一覧のページを GitHub Pages に公開します。週次 PR を CI が自動でマージしたときは、CI が同じワークフローを起動します。
 GitHub Free では private のリポジトリで GitHub Pages を使えないため、リポジトリが public のときだけ動きます。
 初めて公開するときは、リポジトリの Settings → Pages で Source を「GitHub Actions」にします。
 

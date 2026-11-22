@@ -51,28 +51,21 @@
 
 ### 4. 確かめる
 
-一次報告の本文を、`scripts/fetch-source.py` でテキストにしてリポジトリの外に保存する。WebFetch の結果はモデルが処理した文で、本文が一字一句そのままにならないため、突き合わせには使わない。
-
-```bash
-python3 scripts/fetch-source.py /tmp/postmortem-sources {障害の id}={一次報告の URL}
-```
-
-- HTML はタグを除いたテキストに、PDF は `pdftotext` でテキストになる。`pdftotext` がなければ `apt-get install -y poppler-utils` で入れる
-- Google Cloud の `incidents.json` は JSON のまま保存されるので、その障害の `Incident Report` の更新の本文（`updates[].text`）を取り出して、`/tmp/postmortem-sources/{障害の id}.txt` に保存し直す
-- Azure status history のページには直近の報告がすべて並ぶので、そのまま保存してよい
-
-保存したら、次を実行する。すべて成功するまで直す。
+足した障害の引用を、一次報告の本文と突き合わせる。次のスクリプトが、`main` から足した・変えた障害だけについて、`source.url` の本文をテキストにしてリポジトリの外の一時ディレクトリに取得し、`npm run verify-quotes` を走らせる。WebFetch の結果はモデルが処理した文で、本文が一字一句そのままにならないため、突き合わせには使わない。
 
 ```bash
 npm ci
-SOURCES_DIR=/tmp/postmortem-sources npm run verify-quotes
+python3 scripts/verify-changed-quotes.py origin/main
 npm test
 npm run typecheck
 npm run lint
 npm run build
 ```
 
-`verify-quotes` が失敗した引用（`quotes` と `reportedFixes`）は、本文から写し直す。写し直せないものは外す。
+- PDF の報告は `pdftotext` でテキストにする。`pdftotext` がなければ `apt-get install -y poppler-utils` で入れる
+- `source.url` は、引用を写した本文そのものを開ける URL にする。突き合わせはこの URL から取得した本文で行い、PR の CI も同じ確認をする
+
+すべて成功するまで直す。`verify-changed-quotes.py` が失敗した引用（`quotes` と `reportedFixes`）は、本文から写し直す。写し直せないものは外す。
 
 ### 5. PR を作る
 
@@ -87,3 +80,5 @@ gh api repos/k-kudo-hub/postmortem-lens/pulls -f title="✨ 障害のストッ�
 PR の本文には、足した障害ごとに、名前・出典の URL・弱い箇所の数を書く。調べた出どころと、足さなかった候補とその理由も書く。
 
 足すものがなかった週は、PR を作らずに終える。
+
+PR は、CI のすべてのチェック（4 と同じ確認を含む）が成功すると自動でマージされる。自動でマージされるのは、ブランチ名が `claude/stock-` で始まり、`plugin/stock/` の JSON だけを変えた PR に限る。そのため、この手順で `plugin/stock/` の外のファイルを変えない。
