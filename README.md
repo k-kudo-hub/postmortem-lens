@@ -67,7 +67,7 @@ Claude Code v2.1.275 以降で、次を実行してプラグインを入れま�
 
 1. ルーチンが `claude/stock-{日付}` のブランチで、ストックに障害を足す PR を作ります
 2. CI（`.github/workflows/ci.yml`）が、テスト・型チェック・Lint・ビルドに加えて、その PR で足した・変えた障害だけ、出典の URL から一次報告の本文を取得して引用を突き合わせます（`scripts/verify-changed-quotes.py`）。本文は CI の一時ディレクトリに置くだけで、リポジトリには残しません。既存の障害は突き合わせ直しません
-3. すべてのチェックが成功し、PR がストック（`plugin/stock/*.json`）だけを変えていれば、CI が PR を squash でマージし、ブランチを消し、公開ページを更新します。人の確認は挟みません
+3. すべてのチェックが成功し、PR がストック（`plugin/stock/*.json`）だけを変えていれば、`.github/workflows/auto-merge.yml` が PR を squash でマージし、公開ページを更新し、ブランチを消します。人の確認は挟みません。このワークフローは `main` にある定義で動くため、PR の側から判定を書き換えることはできません
 4. チェックが失敗した PR は、マージされずに残ります。失敗したチェックのログに理由が出ます。ストックの外のファイルを変えた PR には、自動でマージしなかった理由をコメントします
 
 ## 分かっている制限
@@ -100,7 +100,7 @@ npm run dev      # ストックの一覧のページを http://localhost:5173/ �
 
 ### 公開のしくみ
 
-`main` に push すると、GitHub Actions（`.github/workflows/deploy.yml`）がストックの一覧のページを GitHub Pages に公開します。週次 PR を CI が自動でマージしたときは、CI が同じワークフローを起動します。
+`main` に push すると、GitHub Actions（`.github/workflows/deploy.yml`）がストックの一覧のページを GitHub Pages に公開します。週次 PR を自動でマージしたときは、`auto-merge.yml` が同じワークフローを起動します。
 GitHub Free では private のリポジトリで GitHub Pages を使えないため、リポジトリが public のときだけ動きます。
 初めて公開するときは、リポジトリの Settings → Pages で Source を「GitHub Actions」にします。
 
