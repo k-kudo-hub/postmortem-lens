@@ -82,12 +82,18 @@ npm run build
 ```bash
 git switch -c claude/stock-$(date +%Y-%m-%d)
 git add plugin/stock
-git commit -m "✨ 障害のストックに {件数}件を足す"
+git commit -F - <<'EOF'
+✨ Add {件数} outages to the stock
+
+{なぜ足すのか。英語で書く。例: Providers published primary reports for these outages this week, so checks can now catch repositories that could fail the same way.}
+EOF
 git push -u origin HEAD
-gh api repos/k-kudo-hub/postmortem-lens/pulls -f title="✨ 障害のストックに {件数}件を足す（$(date +%Y-%m-%d)）" -f head="claude/stock-$(date +%Y-%m-%d)" -f base=main -f body="{本文}"
+gh api repos/k-kudo-hub/postmortem-lens/pulls -f title="✨ Add {件数} outages to the stock ($(date +%Y-%m-%d))" -f head="claude/stock-$(date +%Y-%m-%d)" -f base=main -f body="{本文}"
 ```
 
-PR の本文には、足した障害ごとに、名前・出典の URL・弱い箇所の数を書く。調べた出どころと、足さなかった候補とその理由も書く。
+コミットメッセージと PR のタイトル・本文は英語で書き、日本語を入れない（このリポジトリは public で、PR は1つのコミットのまま squash でマージされ、コミットの件名と本文が main にそのまま残るため）。コミットの本文には、変更の理由（Why）を必ず書く。
+
+PR の本文には、英語で、足した障害ごとに、名前・出典の URL・弱い箇所の数を書く。調べた出どころと、足さなかった候補とその理由も書く。
 
 足すものがなかった週は、PR を作らずに終える。
 
