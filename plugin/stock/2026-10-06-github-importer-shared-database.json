@@ -1,0 +1,61 @@
+{
+	"id": "2026-10-06-github-importer-shared-database",
+	"title": "移行ツールが負荷を下げずに共有データベースの接続を使い切った GitHub の障害",
+	"provider": "GitHub",
+	"service": "GitHub（GitHub Enterprise Importer と共有データベース）",
+	"startedAt": "2026-10-06",
+	"duration": "約6分（github.com の要求の失敗・遅延）。企業の移行は約3時間30分止まった（2026-10-06 19:57 UTC 〜）",
+	"source": {
+		"title": "GitHub availability report: October 2026（6日の項）",
+		"url": "https://github.blog/news-insights/company-news/github-availability-report-october-2026/",
+		"publisher": "GitHub",
+		"note": "月次の availability report の、該当する日付の項"
+	},
+	"summary": "移行の急増で、Enterprise Importer が非常に大きなクエリを共有データベースに一気に送り、データベースの接続が使い切られて、同じデータベースを使う github.com の機能の要求が失敗した。Importer はデータベースの過負荷でも負荷を下げなかった。影響は数分で収まったが、修正が入るまで移行は止められた。",
+	"weaknesses": [
+		{
+			"id": "importer-no-backoff",
+			"viewpoint": "trigger.normal-operation",
+			"title": "バッチ処理が、データベースの過負荷でも負荷を下げない",
+			"whatHappened": "移行の急増で Importer が大きなクエリを一気に送り、データベースが過負荷になっても送る量を減らさなかった。",
+			"quotes": [
+				"A surge in migration activity caused GitHub Enterprise Importer to send a burst of very large queries to a shared database.",
+				"The importer did not reduce its load when the database became overloaded."
+			],
+			"reportedFixes": [
+				"We optimized the query GitHub Enterprise Importer sends to the database so that each one stays small and fixed in size.",
+				"We are automating importer backoff when the database is under strain, easing load before it can affect other GitHub services."
+			],
+			"lookFor": [
+				"一括の取り込み・移行・バッチのジョブで、1回のクエリが扱う行数に上限がなく、データベースの遅れを見て送る量を変えない処理",
+				"ジョブのワーカーの並列数が、データベースの接続プールの上限に対して大きく、ジョブ用の接続の上限を分けていない設定"
+			],
+			"countermeasures": [
+				{
+					"action": "バッチ処理のクエリを小さく固定したサイズに分け、データベースの遅延やエラーを見て並列数と送る量を自動で減らす",
+					"firstStep": "バッチ・移行のジョブが発行するクエリの行数の上限と、並列数の設定を一覧にする"
+				}
+			]
+		},
+		{
+			"id": "shared-db-connections-exhausted",
+			"viewpoint": "cascade.shared-entry",
+			"title": "1つのデータベースの接続を、全機能が共有している",
+			"whatHappened": "重いクエリと通常の通信が、データベースの接続を使い切り、同じデータベースを使う別の機能の要求まで完了できなくなった。",
+			"quotes": [
+				"These queries took much longer than usual and, together with normal traffic, used all of the database’s available connections, preventing other github.com features relying on the same database from completing their requests."
+			],
+			"reportedFixes": [],
+			"lookFor": [
+				"バッチ・管理系の処理と、利用者向けの要求が、同じ接続プール・同じデータベースのユーザーを共有している設定",
+				"データベースの接続数の上限と、アプリケーション全体の接続プールの合計の関係が分かるコードや設定の記述"
+			],
+			"countermeasures": [
+				{
+					"action": "バッチ・管理系の処理の接続プールと利用者向けの要求の接続プールを分け、それぞれに上限を付ける",
+					"firstStep": "データベースに接続するサービスと、それぞれの接続プールの上限の合計を書き出して、データベースの上限と比べる"
+				}
+			]
+		}
+	]
+}

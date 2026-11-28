@@ -1,0 +1,63 @@
+{
+	"id": "2026-10-30-github-database-connection-pool-exhaustion",
+	"title": "更新の要求が接続を長く握り、共有の接続プールが尽きた GitHub の障害",
+	"provider": "GitHub",
+	"service": "GitHub（github.com の共有データベースの接続プール）",
+	"startedAt": "2026-10-30",
+	"duration": "約9分（2026-10-30 14:31 UTC 〜）",
+	"source": {
+		"title": "GitHub availability report: October 2026（30日の項）",
+		"url": "https://github.blog/news-insights/company-news/github-availability-report-october-2026/",
+		"publisher": "GitHub",
+		"note": "月次の availability report の、該当する日付の項"
+	},
+	"summary": "多くの github.com サービスが使うデータベースの接続プールが上限に達し、数分間、接続を取れなかった。プールはもともと上限に近く、更新の要求が書き込みのあとに数秒かかる別の照会を行い、接続を使わないまま握っていたことが引き金になった。新しい要求は、接続を待ってタイムアウトまで失敗しなかった。",
+	"weaknesses": [
+		{
+			"id": "connection-held-during-lookup",
+			"viewpoint": "trigger.normal-operation",
+			"title": "接続を取ったまま、遅い処理を待つ",
+			"whatHappened": "更新の要求が、書き込みを始めたあとに数秒かかる別の照会を行い、その間、使わない接続を握り続けた。",
+			"quotes": [
+				"Each one began writing a change, then ran a separate lookup that could take several seconds, keeping its connection reserved but unused the whole time."
+			],
+			"reportedFixes": [
+				"We are now running the slow lookup before these update requests start writing a change, so they no longer hold a database connection while they wait."
+			],
+			"lookFor": [
+				"トランザクションや接続を取得したあとに、別の API 呼び出し・別のクエリ・ファイルの読み書きなどの遅くなりうる処理をしているコード",
+				"接続を取得してから解放するまでの時間に上限（タイムアウト）がない設定"
+			],
+			"countermeasures": [
+				{
+					"action": "接続やトランザクションを取る前に遅い処理を終えておき、接続を握る時間を短く保つ",
+					"firstStep": "接続を取得したまま外部の呼び出しや重い照会を行っているコードを、トランザクションの範囲から探す"
+				}
+			]
+		},
+		{
+			"id": "pool-no-headroom",
+			"viewpoint": "cascade.shared-entry",
+			"title": "多くのサービスが共有する接続プールが、上限に近いまま動いている",
+			"whatHappened": "多くのサービスが使う接続プールが上限に近いまま動いていたため、少数の要求が長く握っただけで使い切られ、新しい要求は待ってから失敗した。",
+			"quotes": [
+				"A database connection pool used by many github.com services reached its limit, and for several minutes no connections were available.",
+				"The pool was already running near capacity when some update requests started holding their connections far longer than expected."
+			],
+			"reportedFixes": [
+				"We are evaluating limits on how long a pooled database connection can be held, so a slow request pattern is less likely to tie up the pool."
+			],
+			"lookFor": [
+				"接続プールの最大数が、通常時の使用数にほぼ等しい、または使用数を計測していない設定",
+				"接続プールの取得待ちのタイムアウトが長い、または設定していない設定",
+				"複数のサービス・機能が、1つの接続プールを分けずに共有している構成"
+			],
+			"countermeasures": [
+				{
+					"action": "接続プールの使用数に余裕を持たせて使用率にアラートを付け、取得待ちのタイムアウトを短くする",
+					"firstStep": "接続プールの最大数と通常時・ピーク時の使用数を計測して比べる"
+				}
+			]
+		}
+	]
+}
